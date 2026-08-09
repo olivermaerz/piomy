@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="archive-head">
+    <div>
+      <h1>Archive</h1>
+      <p class="meta clock">Now: {{ now }}</p>
+    </div>
+    <div class="archive-actions">
+      <a class="chip" href="/archive/latest">Latest block</a>
+    </div>
+  </div>
+
+  <nav class="crumbs" aria-label="Breadcrumb">
+    <a href="/archive">Days</a>
+    {% if day %}
+      <span>/</span>
+      <a href="/archive/{{ day }}">{{ day }}</a>
+    {% endif %}
+    {% if hour is not none %}
+      <span>/</span>
+      <a href="/archive/{{ day }}/{{ '%02d'|format(hour) }}">{{ '%02d'|format(hour) }}:00</a>
+    {% endif %}
+    {% if minute_block is not none %}
+      <span>/</span>
+      <span>{{ block_label }}</span>
+    {% endif %}
+  </nav>
+
+  <div class="archive-layout">
+    <aside>
+      <h2>Days</h2>
+      <ul class="day-list">
+        {% for d in days %}
+        <li><a href="/archive/{{ d }}"{% if d == day %} class="active"{% endif %}>{{ d }}</a></li>
+        {% else %}
+        <li class="meta">No archived days yet.</li>
+        {% endfor %}
+      </ul>
+    </aside>
+
+    <section class="archive-main">
+      {% if level == "index" %}
+        <p class="meta">Select a day, or jump to the <a href="/archive/latest">latest 10-minute block</a>.</p>
+
+      {% elif level == "day" %}
+        <h2>{{ day }} - hours</h2>
+        <p class="meta">{{ total_images }} image{{ 's' if total_images != 1 else '' }}</p>
+        <div class="chips">
+          {% for h, c in hours %}
+          <a class="chip" href="/archive/{{ day }}/{{ '%02d'|format(h) }}">
+            {{ '%02d'|format(h) }}:00 <span class="count">{{ c }}</span>
+          </a>
+          {% else %}
+          <p class="meta">No images this day.</p>
+          {% endfor %}
+        </div>
+
+      {% elif level == "hour" %}
+        <h2>{{ day }} {{ '%02d'|format(hour) }}:00 - 10-minute blocks</h2>
+        <p class="meta">{{ total_images }} image{{ 's' if total_images != 1 else '' }} in this hour</p>
+        <div class="chips">
+          {% for m, c in blocks %}
+          <a class="chip" href="/archive/{{ day }}/{{ '%02d'|format(hour) }}/{{ '%02d'|format(m) }}">
+            {{ '%02d'|format(hour) }}:{{ '%02d'|format(m) }}-{{ '%02d'|format(hour) }}:{{ '%02d'|format(m + 9) }}
+            <span class="count">{{ c }}</span>
+          </a>
+          {% else %}
+          <p class="meta">No images this hour.</p>
+          {% endfor %}
+        </div>
+
+      {% elif level == "block" %}
+        <h2>{{ day }} {{ block_label }}</h2>
+        <p class="meta">
+          {{ total_images }} image{{ 's' if total_images != 1 else '' }}
+          - page {{ page }} / {{ total_pages }}
+          - {{ page_size }} per page
+        </p>
+        <div class="pager">
+          {% if prev_page_href %}
+          <a class="chip" href="{{ prev_page_href }}">&lt;- Prev page</a>
+          {% endif %}
+          {% if next_page_href %}
+          <a class="chip" href="{{ next_page_href }}">Next page -&gt;</a>
+          {% endif %}
+        </div>
+        <div class="grid">
+          {% for rel in images %}
+          <a href="/view/{{ rel }}">
+            <img src="/thumb/{{ rel }}" alt="{{ rel }}" loading="lazy">
+            <span>{{ rel.split('/')[-1].split('_')[0][:2] }}:{{ rel.split('/')[-1].split('_')[0][2:4] }}:{{ rel.split('/')[-1].split('_')[0][4:6] }}</span>
+          </a>
+          {% else %}
+          <p class="meta">No images in this block.</p>
+          {% endfor %}
+        </div>
+        <div class="pager">
+          {% if prev_page_href %}
+          <a class="chip" href="{{ prev_page_href }}">&lt;- Prev page</a>
+          {% endif %}
+          {% if next_page_href %}
+          <a class="chip" href="{{ next_page_href }}">Next page -&gt;</a>
+          {% endif %}
+        </div>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

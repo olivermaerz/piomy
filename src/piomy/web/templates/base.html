@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if title %}{{ title }} - {% endif %}Pi-O-My</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <div class="brand">Pi-O-My</div>
+    <nav>
+      <a href="/">Live</a>
+      <a href="/archive">Archive</a>
+      <a href="/settings">Settings</a>
+      <a href="/health">Health</a>
+    </nav>
+    {% if now is defined and now %}
+    <div class="header-clock" title="Pi local time">{{ now }}</div>
+    {% endif %}
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

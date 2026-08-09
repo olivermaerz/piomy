@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+  {% if setup_mode %}
+  <div class="banner warn">No web password set. Set one in Settings before using this on your LAN.</div>
+  {% endif %}
+  <p class="meta">
+    Last capture: {{ last_capture_at or "-" }}
+    {% if free_gb is not none %} - Free: {{ free_gb }} GiB{% endif %}
+  </p>
+  {% if preview_enabled %}
+  <img class="live-frame" src="/stream.mjpg" alt="Live camera stream">
+  {% else %}
+  <div class="banner">Preview disabled in settings.</div>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,34 @@
+storage:
+  archive_dir: /var/lib/piomy/archive
+  min_free_gb: 20
+  delete_grace_minutes: 30
+
+capture:
+  interval_seconds: 1.0
+  resolution: [2592, 1944]
+  jpeg_quality: 85
+  rotation: 0
+  exposure_mode: auto
+  ev: 0.0
+  exposure_time_us: null
+  analogue_gain: null
+
+preview:
+  resolution: [640, 480]
+  enabled: true
+
+web:
+  host: 0.0.0.0
+  port: 8080
+  # Generate with: uv run python -c "from piomy.auth import hash_password; print(hash_password('changeme'))"
+  password_hash: ""
+
+sync:
+  enabled: false
+  interval_seconds: 60
+  min_age_seconds: 30
+  max_age_days: 14
+  smb:
+    url: "//192.168.0.10/share/piomy"
+    username: ""
+    password_file: /etc/piomy/smb.cred

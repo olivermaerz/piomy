@@ -1,0 +1,37 @@
+[project]
+name = "piomy"
+version = "0.1.0"
+description = "Pi-O-My: a security camera application for the Raspberry Pi"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "bcrypt>=4.2.0",
+    "fastapi>=0.115.0",
+    "jinja2>=3.1.4",
+    "pillow>=10.4.0",
+    "python-multipart>=0.0.12",
+    "pyyaml>=6.0.2",
+    "uvicorn[standard]>=0.32.0",
+]
+
+[project.scripts]
+piomy-capture = "piomy.capture:main"
+piomy-web = "piomy.web.app:main"
+piomy-sync = "piomy.sync_smb:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/piomy"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/piomy/web/templates" = "piomy/web/templates"
+"src/piomy/web/static" = "piomy/web/static"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+]
+

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+  <p class="meta clock">Now: {{ now }}</p>
+
+  <div class="viewer-bar">
+    <div class="viewer-nav">
+      {% if older_rel %}
+      <a class="chip" id="nav-older" href="/view/{{ older_rel }}">&lt;- Older</a>
+      {% else %}
+      <span class="chip disabled">&lt;- Older</span>
+      {% endif %}
+      {% if newer_rel %}
+      <a class="chip" id="nav-newer" href="/view/{{ newer_rel }}">Newer -&gt;</a>
+      {% else %}
+      <span class="chip disabled">Newer -&gt;</span>
+      {% endif %}
+    </div>
+    <div class="viewer-meta">
+      <strong>{{ stamp }}</strong>
+      <a href="{{ back_href }}">Back to {{ back_label }}</a>
+    </div>
+  </div>
+
+  <figure class="viewer">
+    <img id="viewer-img" src="/media/{{ rel }}" alt="{{ stamp }}">
+  </figure>
+
+  <p class="hint">Keyboard: left arrow = older, right arrow = newer</p>
+
+  {% if older_rel %}
+  <link rel="prefetch" href="/media/{{ older_rel }}">
+  <link rel="prefetch" href="/thumb/{{ older_rel }}">
+  {% endif %}
+  {% if newer_rel %}
+  <link rel="prefetch" href="/media/{{ newer_rel }}">
+  <link rel="prefetch" href="/thumb/{{ newer_rel }}">
+  {% endif %}
+
+  <script>
+    (function () {
+      var older = document.getElementById("nav-older");
+      var newer = document.getElementById("nav-newer");
+      // Prefetch neighbors into the browser cache (same-origin basic auth is fine)
+      ["{% if newer_rel %}/media/{{ newer_rel }}{% endif %}",
+       "{% if older_rel %}/media/{{ older_rel }}{% endif %}",
+       "{% if newer_rel %}/thumb/{{ newer_rel }}{% endif %}",
+       "{% if older_rel %}/thumb/{{ older_rel }}{% endif %}"]
+        .filter(Boolean)
+        .forEach(function (url) {
+          var img = new Image();
+          img.src = url;
+        });
+      document.addEventListener("keydown", function (e) {
+        if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+        if (e.key === "ArrowLeft" && older) {
+          e.preventDefault();
+          window.location.href = older.href;
+        } else if (e.key === "ArrowRight" && newer) {
+          e.preventDefault();
+          window.location.href = newer.href;
+        }
+      });
+    })();
+  </script>
+{% endblock %}

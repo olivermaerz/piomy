@@ -1,0 +1,17 @@
+[Unit]
+Description=Pi-O-My web UI (live view, archive, settings)
+After=network-online.target piomy-capture.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=piomy
+Group=piomy
+Environment=PIOMY_CONFIG=/etc/piomy/config.yaml
+WorkingDirectory=/var/lib/piomy
+ExecStart=/opt/piomy/venv/bin/piomy-web
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

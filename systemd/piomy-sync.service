@@ -1,0 +1,17 @@
+[Unit]
+Description=Pi-O-My Samba sync worker (rclone)
+After=network-online.target piomy-capture.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=piomy
+Group=piomy
+Environment=PIOMY_CONFIG=/etc/piomy/config.yaml
+WorkingDirectory=/var/lib/piomy
+ExecStart=/opt/piomy/venv/bin/piomy-sync
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,21 @@
+[Unit]
+Description=Pi-O-My camera capture daemon
+After=network-online.target local-fs.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=piomy
+Group=piomy
+Environment=PIOMY_CONFIG=/etc/piomy/config.yaml
+WorkingDirectory=/var/lib/piomy
+ExecStart=/opt/piomy/venv/bin/piomy-capture
+Restart=always
+RestartSec=2
+Nice=5
+
+# Camera device access
+SupplementaryGroups=video
+
+[Install]
+WantedBy=multi-user.target

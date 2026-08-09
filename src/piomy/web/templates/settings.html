@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Settings</h1>
+  {% if setup_mode %}
+  <div class="banner warn">Set a password below. Until then anyone on the network can open the UI.</div>
+  {% endif %}
+  {% if saved %}
+  <div class="banner ok">Saved. Capture and sync pick up changes on the next config check (or SIGHUP).</div>
+  {% endif %}
+  {% if error %}
+  <div class="banner err">{{ error }}</div>
+  {% endif %}
+
+  <form class="settings" method="post" action="/settings">
+    <fieldset>
+      <legend>Storage</legend>
+      <label>Archive directory
+        <input name="archive_dir" value="{{ cfg.storage.archive_dir }}" required>
+      </label>
+      <div class="row">
+        <label>Min free GiB
+          <input type="number" step="0.1" min="1" name="min_free_gb" value="{{ cfg.storage.min_free_gb }}" required>
+        </label>
+        <label>Delete grace (minutes)
+          <input type="number" min="0" name="delete_grace_minutes" value="{{ cfg.storage.delete_grace_minutes }}" required>
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Capture</legend>
+      <label>Interval (seconds)
+        <input type="number" step="0.1" min="0.2" name="interval_seconds" value="{{ cfg.capture.interval_seconds }}" required>
+      </label>
+      <div class="row">
+        <label>Width
+          <input type="number" name="res_w" value="{{ cfg.capture.resolution[0] }}" required>
+        </label>
+        <label>Height
+          <input type="number" name="res_h" value="{{ cfg.capture.resolution[1] }}" required>
+        </label>
+      </div>
+      <div class="row">
+        <label>JPEG quality
+          <input type="number" min="1" max="100" name="jpeg_quality" value="{{ cfg.capture.jpeg_quality }}" required>
+        </label>
+        <label>Rotation
+          <select name="rotation">
+            {% for r in [0, 90, 180, 270] %}
+            <option value="{{ r }}" {% if cfg.capture.rotation == r %}selected{% endif %}>{{ r }}°</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label>Exposure mode
+          <select name="exposure_mode">
+            <option value="auto" {% if cfg.capture.exposure_mode == "auto" %}selected{% endif %}>auto</option>
+            <option value="manual" {% if cfg.capture.exposure_mode == "manual" %}selected{% endif %}>manual</option>
+          </select>
+        </label>
+        <label>EV (brightness)
+          <input type="number" step="0.1" name="ev" value="{{ cfg.capture.ev }}" required>
+        </label>
+      </div>
+      <div class="row">
+        <label>Exposure time µs (manual)
+          <input name="exposure_time_us" value="{{ cfg.capture.exposure_time_us or '' }}" placeholder="e.g. 10000">
+        </label>
+        <label>Analogue gain (manual)
+          <input name="analogue_gain" value="{{ cfg.capture.analogue_gain or '' }}" placeholder="e.g. 2.0">
+        </label>
+      </div>
+      <p class="hint">Behind glass at night: raise EV or use manual exposure. Red LED: see README.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Preview</legend>
+      <label>
+        <input type="checkbox" name="preview_enabled" value="on" {% if cfg.preview.enabled %}checked{% endif %}>
+        Enable live stream (serves latest.jpg as MJPEG)
+      </label>
+      <div class="row">
+        <label>Preview width
+          <input type="number" name="preview_w" value="{{ cfg.preview.resolution[0] }}">
+        </label>
+        <label>Preview height
+          <input type="number" name="preview_h" value="{{ cfg.preview.resolution[1] }}">
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Web auth</legend>
+      <label>New password (leave blank to keep)
+        <input type="password" name="new_password" autocomplete="new-password">
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Samba sync</legend>
+      <label>
+        <input type="checkbox" name="sync_enabled" value="on" {% if cfg.sync.enabled %}checked{% endif %}>
+        Enable sync worker
+      </label>
+      <div class="row">
+        <label>Interval (seconds)
+          <input type="number" min="10" name="sync_interval_seconds" value="{{ cfg.sync.interval_seconds }}">
+        </label>
+        <label>Min age before sync (seconds)
+          <input type="number" min="0" name="sync_min_age_seconds" value="{{ cfg.sync.min_age_seconds }}">
+        </label>
+      </div>
+      <label>Remote max age (days)
+        <input type="number" min="1" name="sync_max_age_days" value="{{ cfg.sync.max_age_days }}">
+      </label>
+      <label>SMB URL
+        <input name="smb_url" value="{{ cfg.sync.smb.url }}" placeholder="//192.168.0.10/share/piomy">
+      </label>
+      <div class="row">
+        <label>SMB username
+          <input name="smb_username" value="{{ cfg.sync.smb.username }}">
+        </label>
+        <label>SMB password file
+          <input name="smb_password_file" value="{{ cfg.sync.smb.password_file }}">
+        </label>
+      </div>
+      <p class="hint">Requires <code>rclone</code> and the <code>piomy-sync</code> systemd unit. Password file should be root-only.</p>
+    </fieldset>
+
+    <button type="submit">Save</button>
+  </form>
+{% endblock %}

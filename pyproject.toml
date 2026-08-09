@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Pi-O-My: a security camera application for the Raspberry Pi"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
 dependencies = [
     "bcrypt>=4.2.0",
     "fastapi>=0.115.0",

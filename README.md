@@ -110,3 +110,7 @@ Header shows Pi local time. **Latest block** jumps to the newest 10-minute windo
 uv sync --group dev
 uv run pytest
 ```
+
+## License
+
+MIT. See [LICENSE](LICENSE).

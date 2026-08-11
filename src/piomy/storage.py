@@ -439,37 +439,48 @@ def neighbor_block(
 ) -> tuple[str, int, int] | None:
     """Adjacent non-empty block as (day, hour, minute_block), crossing hours/days."""
     mb = block_minute(minute_block)
-    imgs = list_images_for_block(archive_dir, day, hour, mb)
-    if imgs:
-        edge = imgs[-1] if newer else imgs[0]
-        edge_rel = rel_to_archive(archive_dir, edge)
-        neighbor = neighbor_rel(archive_dir, edge_rel, newer=newer)
-        if neighbor is None:
-            return None
-        return block_from_rel(neighbor)
+    key = (day, hour, mb)
+    days = list_days(archive_dir)
+    if not days:
+        return None
 
-    # Empty current block: walk ordered non-empty blocks.
-    blocks: list[tuple[str, int, int]] = []
-    for d in list_days(archive_dir):
+    def blocks_for_day(d: str) -> list[tuple[str, int, int]]:
+        out: list[tuple[str, int, int]] = []
         for h, _c in hour_counts(archive_dir, d):
             for block_m, _bc in block_counts(archive_dir, d, h):
-                blocks.append((d, h, block_m))
-    key = (day, hour, mb)
-    if not blocks:
-        return None
-    if key in blocks:
-        idx = blocks.index(key)
-    else:
-        # Insert position among chronological blocks
-        idx = 0
-        while idx < len(blocks) and blocks[idx] < key:
-            idx += 1
-        if newer:
-            return blocks[idx] if idx < len(blocks) else None
-        return blocks[idx - 1] if idx > 0 else None
+                out.append((d, h, block_m))
+        return out
+
     if newer:
-        return blocks[idx + 1] if idx + 1 < len(blocks) else None
-    return blocks[idx - 1] if idx > 0 else None
+        if day in days:
+            for cand in blocks_for_day(day):
+                if cand > key:
+                    return cand
+            start = days.index(day) + 1
+        else:
+            start = 0
+            while start < len(days) and days[start] < day:
+                start += 1
+        for d in days[start:]:
+            later = blocks_for_day(d)
+            if later:
+                return later[0]
+        return None
+
+    if day in days:
+        earlier = [cand for cand in blocks_for_day(day) if cand < key]
+        if earlier:
+            return earlier[-1]
+        end = days.index(day)
+    else:
+        end = 0
+        while end < len(days) and days[end] < day:
+            end += 1
+    for d in reversed(days[:end]):
+        earlier_day = blocks_for_day(d)
+        if earlier_day:
+            return earlier_day[-1]
+    return None
 
 
 def display_time_from_rel(rel: str) -> str:

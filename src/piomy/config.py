@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import Any, Literal, TypeVar
@@ -14,6 +15,8 @@ log = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_PATH = Path("/etc/piomy/config.yaml")
 ENV_CONFIG_PATH = "PIOMY_CONFIG"
+DEFAULT_ACCENT_COLOR = "#6fbf7a"
+_ACCENT_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 T = TypeVar("T")
 
@@ -48,6 +51,7 @@ class WebConfig:
     host: str = "0.0.0.0"
     port: int = 8080
     password_hash: str = ""
+    accent_color: str = DEFAULT_ACCENT_COLOR
 
 
 @dataclass
@@ -160,6 +164,10 @@ def validate(cfg: AppConfig) -> None:
         raise ValueError("preview.resolution must be [width, height]")
     if cfg.web.port < 1 or cfg.web.port > 65535:
         raise ValueError("web.port out of range")
+    accent = (cfg.web.accent_color or "").strip()
+    if not _ACCENT_RE.match(accent):
+        raise ValueError("web.accent_color must be a #RRGGBB hex color")
+    cfg.web.accent_color = accent.lower()
     if cfg.sync.interval_seconds < 10:
         raise ValueError("sync.interval_seconds must be >= 10")
     if cfg.sync.max_age_days < 1:

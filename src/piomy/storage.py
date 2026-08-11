@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import json
 import logging
+import multiprocessing
 import os
 import re
 import shutil
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
+
+from queue import Full
 
 from PIL import Image
 
@@ -76,7 +81,7 @@ def save_jpeg_bytes(
     thumbs_dir: Path | None = None,
     thumb_max: int = 320,
 ) -> Path:
-    """Write archive JPEG, update latest.jpg, optionally write thumbnail."""
+    """Write archive JPEG, update latest.jpg, optionally write thumbnail synchronously."""
     when = datetime.now().astimezone()
     dest = day_dir(archive_dir, when) / archive_filename(when)
     atomic_write_bytes(dest, data)
@@ -91,6 +96,73 @@ def save_jpeg_bytes(
             log.exception("Thumbnail generation failed for %s", dest)
 
     return dest
+
+
+def thumb_worker_main(queue: Any) -> None:
+    """Process entrypoint: consume (image, thumbs_dir, archive_dir, thumb_max) jobs."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s [thumb] %(message)s",
+        stream=sys.stdout,
+    )
+    while True:
+        job = queue.get()
+        if job is None:
+            break
+        try:
+            image_s, thumbs_s, archive_s, thumb_max = job
+            write_thumb(Path(image_s), Path(thumbs_s), Path(archive_s), thumb_max=int(thumb_max))
+        except Exception:
+            log.exception("Thumbnail worker failed for job %s", job)
+
+
+class ThumbWorker:
+    """Bounded process queue for Pillow thumbnail generation."""
+
+    def __init__(self, maxsize: int = 8) -> None:
+        self._queue: Any = multiprocessing.Queue(maxsize=maxsize)
+        self._proc = multiprocessing.Process(
+            target=thumb_worker_main,
+            args=(self._queue,),
+            name="piomy-thumb",
+            daemon=True,
+        )
+        self._proc.start()
+        self._dropped = 0
+
+    def enqueue(
+        self,
+        image: Path,
+        thumbs_dir: Path,
+        archive_dir: Path,
+        thumb_max: int = 320,
+    ) -> bool:
+        """Queue a thumb job. Returns False if the queue is full (skipped)."""
+        job = (str(image), str(thumbs_dir), str(archive_dir), int(thumb_max))
+        try:
+            self._queue.put_nowait(job)
+            return True
+        except Full:
+            self._dropped += 1
+            if self._dropped == 1 or self._dropped % 50 == 0:
+                log.warning(
+                    "Thumb queue full; skipping (dropped=%s). Web can generate on demand.",
+                    self._dropped,
+                )
+            return False
+
+    def close(self, timeout: float = 30.0) -> None:
+        """Signal worker to exit and wait for drain."""
+        try:
+            self._queue.put(None, timeout=min(5.0, timeout))
+        except Exception:
+            log.warning("Could not send thumb worker shutdown sentinel")
+        self._proc.join(timeout=timeout)
+        if self._proc.is_alive():
+            log.warning("Thumb worker did not exit in time; terminating")
+            self._proc.terminate()
+            self._proc.join(timeout=5.0)
+
 
 
 def thumb_path_for(image: Path, thumbs_dir: Path, archive_dir: Path) -> Path:

@@ -1,14 +1,18 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="--accent: {{ accent_color() }};">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% if title %}{{ title }} - {% endif %}Pi-O-My</title>
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="/static/piomy-logo.webp" type="image/webp">
 </head>
 <body>
   <header>
-    <div class="brand">Pi-O-My</div>
+    <a class="brand" href="/">
+      <img src="/static/piomy-logo.webp" alt="" width="36" height="36">
+      <span>Pi-O-My</span>
+    </a>
     <nav>
       <a href="/">Live</a>
       <a href="/archive">Archive</a>

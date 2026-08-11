@@ -205,16 +205,6 @@ button[type="submit"]:hover {
   font-size: 0.8rem;
 }
 
-.header-clock {
-  color: var(--muted);
-  font-size: 0.85rem;
-  margin-left: auto;
-}
-
-.clock {
-  font-variant-numeric: tabular-nums;
-}
-
 .archive-head {
   display: flex;
   flex-wrap: wrap;

@@ -25,6 +25,7 @@ from piomy.storage import (
     block_from_rel,
     block_href,
     block_minute,
+    cpu_temp_c,
     day_folder,
     display_time_from_rel,
     ensure_thumb,
@@ -34,7 +35,6 @@ from piomy.storage import (
     list_days,
     list_images_for_block,
     neighbor_rel,
-    now_local_str,
     paginate,
     parse_day,
     read_status,
@@ -77,7 +77,6 @@ def require_auth(
 
 def _archive_ctx(**extra: Any) -> dict[str, Any]:
     return {
-        "now": now_local_str(),
         "page_size": PAGE_SIZE,
         **extra,
     }
@@ -110,6 +109,8 @@ def create_app() -> FastAPI:
             "archive_error": None if ok else reason,
             "free_gb": free if free is not None else status_data.get("free_gb"),
             "last_capture_at": status_data.get("last_capture_at"),
+            "capture_fps": status_data.get("capture_fps"),
+            "cpu_temp_c": cpu_temp_c(),
             "sync": sync,
         }
 
@@ -125,11 +126,11 @@ def create_app() -> FastAPI:
             "live.html",
             {
                 "title": "Live",
-                "last_capture_at": status_data.get("last_capture_at"),
                 "free_gb": status_data.get("free_gb"),
+                "capture_fps": status_data.get("capture_fps"),
+                "cpu_temp_c": cpu_temp_c(),
                 "preview_enabled": cfg.preview.enabled,
                 "setup_mode": user == "setup",
-                "now": now_local_str(),
             },
         )
 
@@ -352,7 +353,6 @@ def create_app() -> FastAPI:
             "view.html",
             {
                 "title": display_time_from_rel(rel),
-                "now": now_local_str(),
                 "rel": rel,
                 "stamp": display_time_from_rel(rel),
                 "older_rel": older,
@@ -406,7 +406,6 @@ def create_app() -> FastAPI:
                 "saved": saved == "1",
                 "error": error,
                 "setup_mode": user == "setup",
-                "now": now_local_str(),
             },
         )
 

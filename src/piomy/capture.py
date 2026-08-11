@@ -7,6 +7,7 @@ import os
 import signal
 import sys
 import time
+from collections import deque
 from datetime import datetime, timezone
 
 from piomy.camera import CameraError, create_camera
@@ -15,6 +16,7 @@ from piomy.storage import (
     archive_ready,
     enforce_min_free,
     free_gb,
+    measured_fps,
     save_jpeg_bytes,
     write_status,
 )
@@ -74,6 +76,8 @@ def run(cfg: AppConfig | None = None) -> None:
         )
 
     last_capture_at: str | None = None
+    capture_fps: float | None = None
+    capture_times: deque[float] = deque(maxlen=20)
     camera_ok = True
 
     while not _stop_requested:
@@ -98,6 +102,7 @@ def run(cfg: AppConfig | None = None) -> None:
                     "archive_ok": False,
                     "archive_error": reason,
                     "last_capture_at": last_capture_at,
+                    "capture_fps": capture_fps,
                     "free_gb": None,
                 },
             )
@@ -114,6 +119,8 @@ def run(cfg: AppConfig | None = None) -> None:
                 thumbs_dir=cfg.thumbs_dir(),
             )
             last_capture_at = datetime.now(timezone.utc).isoformat()
+            capture_times.append(time.monotonic())
+            capture_fps = measured_fps(capture_times)
             camera_ok = True
             deleted = enforce_min_free(cfg)
             write_status(
@@ -124,6 +131,7 @@ def run(cfg: AppConfig | None = None) -> None:
                     "archive_error": None,
                     "last_capture_at": last_capture_at,
                     "last_capture_path": str(path),
+                    "capture_fps": capture_fps,
                     "free_gb": round(free_gb(cfg.archive_path()), 3),
                     "deleted_for_retention": deleted,
                 },
@@ -138,6 +146,7 @@ def run(cfg: AppConfig | None = None) -> None:
                     "archive_ok": True,
                     "last_error": str(exc),
                     "last_capture_at": last_capture_at,
+                    "capture_fps": capture_fps,
                     "free_gb": round(free_gb(cfg.archive_path()), 3),
                 },
             )
@@ -151,6 +160,7 @@ def run(cfg: AppConfig | None = None) -> None:
                     "archive_ok": True,
                     "last_error": str(exc),
                     "last_capture_at": last_capture_at,
+                    "capture_fps": capture_fps,
                     "free_gb": round(free_gb(cfg.archive_path()), 3),
                 },
             )

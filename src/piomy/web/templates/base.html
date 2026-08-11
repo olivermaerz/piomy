@@ -15,9 +15,6 @@
       <a href="/settings">Settings</a>
       <a href="/health">Health</a>
     </nav>
-    {% if now is defined and now %}
-    <div class="header-clock" title="Pi local time">{{ now }}</div>
-    {% endif %}
   </header>
   <main>
     {% block content %}{% endblock %}

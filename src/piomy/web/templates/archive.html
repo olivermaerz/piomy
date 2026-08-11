@@ -5,7 +5,23 @@
       <h1>Archive</h1>
     </div>
     <div class="archive-actions">
-      <a class="chip" href="/archive/latest">Latest block</a>
+      {% if latest_images_href %}
+      <a class="chip" href="{{ latest_images_href }}">Latest images</a>
+      {% else %}
+      <a class="chip" href="/archive/latest">Latest images</a>
+      {% endif %}
+      {% if level == "block" %}
+        {% if prev_block_href %}
+        <a class="chip" href="{{ prev_block_href }}">&lt;- Prev block</a>
+        {% else %}
+        <span class="chip disabled">&lt;- Prev block</span>
+        {% endif %}
+        {% if next_block_href %}
+        <a class="chip" href="{{ next_block_href }}">Next block -&gt;</a>
+        {% else %}
+        <span class="chip disabled">Next block -&gt;</span>
+        {% endif %}
+      {% endif %}
     </div>
   </div>
 
@@ -39,7 +55,7 @@
 
     <section class="archive-main">
       {% if level == "index" %}
-        <p class="meta">Select a day, or jump to the <a href="/archive/latest">latest 10-minute block</a>.</p>
+        <p class="meta">Select a day, or jump to the <a href="/archive/latest">latest images</a>.</p>
 
       {% elif level == "day" %}
         <h2>{{ day }} - hours</h2>
@@ -76,11 +92,17 @@
           - {{ page_size }} per page
         </p>
         <div class="pager">
+          {% if prev_block_href %}
+          <a class="chip" href="{{ prev_block_href }}">&lt;- Prev block</a>
+          {% endif %}
           {% if prev_page_href %}
           <a class="chip" href="{{ prev_page_href }}">&lt;- Prev page</a>
           {% endif %}
           {% if next_page_href %}
           <a class="chip" href="{{ next_page_href }}">Next page -&gt;</a>
+          {% endif %}
+          {% if next_block_href %}
+          <a class="chip" href="{{ next_block_href }}">Next block -&gt;</a>
           {% endif %}
         </div>
         <div class="grid">
@@ -94,11 +116,17 @@
           {% endfor %}
         </div>
         <div class="pager">
+          {% if prev_block_href %}
+          <a class="chip" href="{{ prev_block_href }}">&lt;- Prev block</a>
+          {% endif %}
           {% if prev_page_href %}
           <a class="chip" href="{{ prev_page_href }}">&lt;- Prev page</a>
           {% endif %}
           {% if next_page_href %}
           <a class="chip" href="{{ next_page_href }}">Next page -&gt;</a>
+          {% endif %}
+          {% if next_block_href %}
+          <a class="chip" href="{{ next_block_href }}">Next block -&gt;</a>
           {% endif %}
         </div>
       {% endif %}

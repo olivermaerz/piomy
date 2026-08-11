@@ -343,6 +343,63 @@ def block_href(day: str, hour: int, minute_block: int, page: int = 1) -> str:
     return href
 
 
+def latest_images_href(archive_dir: Path, page_size: int = PAGE_SIZE) -> str | None:
+    """Href to the last page of the newest non-empty 10-minute block."""
+    latest = latest_image_rel(archive_dir)
+    if latest is None:
+        return None
+    info = block_from_rel(latest)
+    if info is None:
+        return None
+    day, hour, mb = info
+    imgs = list_images_for_block(archive_dir, day, hour, mb)
+    _, _, total_pages = paginate(imgs, 1, page_size)
+    return block_href(day, hour, mb, total_pages)
+
+
+def neighbor_block(
+    archive_dir: Path,
+    day: str,
+    hour: int,
+    minute_block: int,
+    *,
+    newer: bool,
+) -> tuple[str, int, int] | None:
+    """Adjacent non-empty block as (day, hour, minute_block), crossing hours/days."""
+    mb = block_minute(minute_block)
+    imgs = list_images_for_block(archive_dir, day, hour, mb)
+    if imgs:
+        edge = imgs[-1] if newer else imgs[0]
+        edge_rel = rel_to_archive(archive_dir, edge)
+        neighbor = neighbor_rel(archive_dir, edge_rel, newer=newer)
+        if neighbor is None:
+            return None
+        return block_from_rel(neighbor)
+
+    # Empty current block: walk ordered non-empty blocks.
+    blocks: list[tuple[str, int, int]] = []
+    for d in list_days(archive_dir):
+        for h, _c in hour_counts(archive_dir, d):
+            for block_m, _bc in block_counts(archive_dir, d, h):
+                blocks.append((d, h, block_m))
+    key = (day, hour, mb)
+    if not blocks:
+        return None
+    if key in blocks:
+        idx = blocks.index(key)
+    else:
+        # Insert position among chronological blocks
+        idx = 0
+        while idx < len(blocks) and blocks[idx] < key:
+            idx += 1
+        if newer:
+            return blocks[idx] if idx < len(blocks) else None
+        return blocks[idx - 1] if idx > 0 else None
+    if newer:
+        return blocks[idx + 1] if idx + 1 < len(blocks) else None
+    return blocks[idx - 1] if idx > 0 else None
+
+
 def display_time_from_rel(rel: str) -> str:
     day = day_from_rel(rel)
     parsed = parse_image_name(Path(rel).name)

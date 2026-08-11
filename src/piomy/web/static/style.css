@@ -57,6 +57,7 @@ header {
   text-transform: lowercase;
   color: var(--text);
   text-decoration: none;
+  line-height: 1;
 }
 
 .brand:hover {
@@ -65,10 +66,16 @@ header {
 }
 
 .brand img {
+  display: block;
   width: 36px;
   height: 36px;
   object-fit: contain;
   flex-shrink: 0;
+}
+
+.brand span {
+  line-height: 1;
+  display: block;
 }
 
 nav {

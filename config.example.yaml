@@ -20,6 +20,7 @@ preview:
 web:
   host: 0.0.0.0
   port: 8080
+  workers: 2
   accent_color: "#6fbf7a"
   # Generate with: uv run python -c "from piomy.auth import hash_password; print(hash_password('changeme'))"
   password_hash: ""

@@ -508,6 +508,7 @@ def main() -> None:
         "piomy.web.app:app",
         host=cfg.web.host,
         port=cfg.web.port,
+        workers=cfg.web.workers,
         reload=False,
         log_level="info",
     )

@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Install Pi-O-My on Raspberry Pi OS (Bookworm) using uv.
+# Install or update Pi-O-My on Raspberry Pi OS (Bookworm) using uv.
+#
+#   sudo ./scripts/install.sh           # full install (recreates venv)
+#   sudo ./scripts/install.sh --update  # update code/package; skip bootstrap
+#
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -8,38 +12,93 @@ CONFIG_DIR="${CONFIG_DIR:-/etc/piomy}"
 DATA_DIR="${DATA_DIR:-/var/lib/piomy}"
 ARCHIVE_DIR="${ARCHIVE_DIR:-${DATA_DIR}/archive}"
 SERVICE_USER="${SERVICE_USER:-piomy}"
+MODE="install"
+
+usage() {
+  cat <<EOF
+Usage: sudo $(basename "$0") [options]
+
+Options:
+  --update, --skip-bootstrap  Update deploy only: sync code, refresh package in
+                              existing venv, reload units. Skips uv bootstrap,
+                              service-user creation, and venv recreation.
+  -h, --help                  Show this help.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --update|--skip-bootstrap)
+      MODE="update"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
 
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "Run as root (sudo)." >&2
   exit 1
 fi
 
-echo "==> Ensuring uv is installed"
-if ! command -v uv >/dev/null 2>&1; then
-  curl -LsSf https://astral.sh/uv/install.sh | sh
+if [[ "${MODE}" == "update" ]]; then
+  echo "==> Update mode (skipping initial bootstrap)"
+fi
+
+if [[ "${MODE}" == "install" ]]; then
+  echo "==> Ensuring uv is installed"
+  if ! command -v uv >/dev/null 2>&1; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="${HOME}/.local/bin:/root/.local/bin:${PATH}"
+  fi
+else
   export PATH="${HOME}/.local/bin:/root/.local/bin:${PATH}"
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "uv not found on PATH. Run a full install once, or install uv first." >&2
+    exit 1
+  fi
 fi
 
-echo "==> Creating service user ${SERVICE_USER}"
-if ! id "${SERVICE_USER}" >/dev/null 2>&1; then
-  useradd --system --home "${DATA_DIR}" --shell /usr/sbin/nologin "${SERVICE_USER}"
+if [[ "${MODE}" == "install" ]]; then
+  echo "==> Creating service user ${SERVICE_USER}"
+  if ! id "${SERVICE_USER}" >/dev/null 2>&1; then
+    useradd --system --home "${DATA_DIR}" --shell /usr/sbin/nologin "${SERVICE_USER}"
+  fi
+  usermod -aG video "${SERVICE_USER}" || true
+elif ! id "${SERVICE_USER}" >/dev/null 2>&1; then
+  echo "Service user ${SERVICE_USER} missing. Run a full install first." >&2
+  exit 1
 fi
-usermod -aG video "${SERVICE_USER}" || true
 
-echo "==> Creating directories"
+echo "==> Syncing source to ${INSTALL_ROOT}/src-repo"
 mkdir -p "${INSTALL_ROOT}" "${CONFIG_DIR}" "${ARCHIVE_DIR}" "${DATA_DIR}"
-# Copy checkout into install root
 rsync -a --delete \
   --exclude '.venv' \
   --exclude '.git' \
   --exclude '__pycache__' \
   "${REPO_ROOT}/" "${INSTALL_ROOT}/src-repo/"
 
-echo "==> Creating uv venv and installing package"
 cd "${INSTALL_ROOT}/src-repo"
 # system-site-packages: use apt python3-picamera2
-# --clear: replace existing venv on redeploy without prompting
-uv venv --clear --system-site-packages "${INSTALL_ROOT}/venv"
+if [[ ! -d "${INSTALL_ROOT}/venv" ]]; then
+  echo "==> Creating uv venv"
+  uv venv --system-site-packages "${INSTALL_ROOT}/venv"
+elif [[ "${MODE}" == "install" ]]; then
+  echo "==> Recreating uv venv"
+  uv venv --clear --system-site-packages "${INSTALL_ROOT}/venv"
+else
+  echo "==> Reusing existing venv"
+fi
+
+echo "==> Installing package into venv"
 uv pip install --python "${INSTALL_ROOT}/venv/bin/python" -e .
 if ! "${INSTALL_ROOT}/venv/bin/python" -c "import picamera2" 2>/dev/null; then
   echo "NOTE: picamera2 not importable. Install: sudo apt install -y python3-picamera2"
@@ -76,23 +135,28 @@ systemctl daemon-reload
 systemctl enable piomy-capture.service piomy-web.service piomy-sync.service
 systemctl restart piomy-capture.service piomy-web.service piomy-sync.service
 
-BOOT_CFG=""
-for candidate in /boot/firmware/config.txt /boot/config.txt; do
-  if [[ -f "${candidate}" ]]; then
-    BOOT_CFG="${candidate}"
-    break
-  fi
-done
+if [[ "${MODE}" == "install" ]]; then
+  BOOT_CFG=""
+  for candidate in /boot/firmware/config.txt /boot/config.txt; do
+    if [[ -f "${candidate}" ]]; then
+      BOOT_CFG="${candidate}"
+      break
+    fi
+  done
 
-if [[ -n "${BOOT_CFG}" ]]; then
-  if ! grep -q '^disable_camera_led=1' "${BOOT_CFG}"; then
-    echo "==> Optional: to reduce red glare behind glass, add to ${BOOT_CFG} and reboot:"
-    echo "    disable_camera_led=1"
-    echo "    (Check local rules first; some places require a visible camera indicator.)"
+  if [[ -n "${BOOT_CFG}" ]]; then
+    if ! grep -q '^disable_camera_led=1' "${BOOT_CFG}"; then
+      echo "==> Optional: to reduce red glare behind glass, add to ${BOOT_CFG} and reboot:"
+      echo "    disable_camera_led=1"
+      echo "    (Check local rules first; some places require a visible camera indicator.)"
+    fi
   fi
 fi
 
-echo "==> Done"
+echo "==> Done (${MODE})"
 echo "UI: http://$(hostname -I | awk '{print $1}'):8080  (user any, password changeme unless changed)"
-echo "Mount your SSD at ${ARCHIVE_DIR} (or change storage.archive_dir in Settings)."
-echo "For Samba sync: apt install rclone; put password in ${CONFIG_DIR}/smb.cred (chmod 600); enable in Settings."
+if [[ "${MODE}" == "install" ]]; then
+  echo "Mount your SSD at ${ARCHIVE_DIR} (or change storage.archive_dir in Settings)."
+  echo "For Samba sync: apt install rclone; put password in ${CONFIG_DIR}/smb.cred (chmod 600); enable in Settings."
+fi
+echo "Later updates: sudo ./scripts/install.sh --update"

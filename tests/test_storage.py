@@ -9,11 +9,13 @@ from PIL import Image
 
 from piomy.config import AppConfig, StorageConfig
 from piomy.storage import (
+    ThumbWorker,
     archive_ready,
     cpu_temp_c,
     enforce_min_free,
     measured_fps,
     save_jpeg_bytes,
+    thumb_path_for,
 )
 
 
@@ -37,6 +39,26 @@ def test_atomic_save_and_latest(tmp_path: Path) -> None:
     ok, reason = archive_ready(archive)
     assert ok, reason
     assert any(thumbs.rglob("*.jpg"))
+
+
+def test_thumb_worker_async(tmp_path: Path) -> None:
+    archive = tmp_path / "archive"
+    archive.mkdir()
+    latest = archive / "latest.jpg"
+    thumbs = archive / ".thumbs"
+    dest = save_jpeg_bytes(archive, _jpeg(), latest, thumbs_dir=None)
+    assert not thumb_path_for(dest, thumbs, archive).is_file()
+
+    worker = ThumbWorker(maxsize=2)
+    try:
+        assert worker.enqueue(dest, thumbs, archive) is True
+        deadline = time.time() + 10
+        out = thumb_path_for(dest, thumbs, archive)
+        while time.time() < deadline and not out.is_file():
+            time.sleep(0.05)
+        assert out.is_file()
+    finally:
+        worker.close(timeout=10)
 
 
 def test_min_free_respects_grace(tmp_path: Path, monkeypatch) -> None:

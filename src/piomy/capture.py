@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from piomy.camera import CameraError, create_camera
 from piomy.config import AppConfig, config_mtime, load_config
 from piomy.storage import (
+    ThumbWorker,
     archive_ready,
     enforce_min_free,
     free_gb,
@@ -58,6 +59,7 @@ def run(cfg: AppConfig | None = None) -> None:
     cfg = cfg or load_config()
     mtime = config_mtime()
     camera = create_camera(prefer_mock=prefer_mock)
+    thumbs = ThumbWorker(maxsize=8)
 
     def apply_camera() -> None:
         camera.configure(cfg.capture, cfg.preview)
@@ -80,100 +82,103 @@ def run(cfg: AppConfig | None = None) -> None:
     capture_times: deque[float] = deque(maxlen=20)
     camera_ok = True
 
-    while not _stop_requested:
-        if _reload_requested or config_mtime() != mtime:
-            _reload_requested = False
+    try:
+        while not _stop_requested:
+            if _reload_requested or config_mtime() != mtime:
+                _reload_requested = False
+                try:
+                    cfg = load_config()
+                    mtime = config_mtime()
+                    apply_camera()
+                    log.info("Config reloaded")
+                except Exception:
+                    log.exception("Config reload failed")
+
+            ok, reason = archive_ready(cfg.archive_path())
+            if not ok:
+                camera_ok = camera_ok  # unchanged
+                log.error("Archive not ready: %s", reason)
+                write_status(
+                    cfg,
+                    {
+                        "camera_ok": camera_ok,
+                        "archive_ok": False,
+                        "archive_error": reason,
+                        "last_capture_at": last_capture_at,
+                        "capture_fps": capture_fps,
+                        "free_gb": None,
+                    },
+                )
+                time.sleep(max(cfg.capture.interval_seconds, 2.0))
+                continue
+
+            started = time.monotonic()
             try:
-                cfg = load_config()
-                mtime = config_mtime()
-                apply_camera()
-                log.info("Config reloaded")
-            except Exception:
-                log.exception("Config reload failed")
+                jpeg = camera.capture_jpeg()
+                path = save_jpeg_bytes(
+                    cfg.archive_path(),
+                    jpeg,
+                    cfg.latest_path(),
+                    thumbs_dir=None,
+                )
+                thumbs.enqueue(path, cfg.thumbs_dir(), cfg.archive_path())
+                last_capture_at = datetime.now(timezone.utc).isoformat()
+                capture_times.append(time.monotonic())
+                capture_fps = measured_fps(capture_times)
+                camera_ok = True
+                deleted = enforce_min_free(cfg)
+                write_status(
+                    cfg,
+                    {
+                        "camera_ok": True,
+                        "archive_ok": True,
+                        "archive_error": None,
+                        "last_capture_at": last_capture_at,
+                        "last_capture_path": str(path),
+                        "capture_fps": capture_fps,
+                        "free_gb": round(free_gb(cfg.archive_path()), 3),
+                        "deleted_for_retention": deleted,
+                    },
+                )
+            except CameraError as exc:
+                camera_ok = False
+                log.error("Capture failed: %s", exc)
+                write_status(
+                    cfg,
+                    {
+                        "camera_ok": False,
+                        "archive_ok": True,
+                        "last_error": str(exc),
+                        "last_capture_at": last_capture_at,
+                        "capture_fps": capture_fps,
+                        "free_gb": round(free_gb(cfg.archive_path()), 3),
+                    },
+                )
+            except Exception as exc:
+                camera_ok = False
+                log.exception("Capture loop error")
+                write_status(
+                    cfg,
+                    {
+                        "camera_ok": False,
+                        "archive_ok": True,
+                        "last_error": str(exc),
+                        "last_capture_at": last_capture_at,
+                        "capture_fps": capture_fps,
+                        "free_gb": round(free_gb(cfg.archive_path()), 3),
+                    },
+                )
 
-        ok, reason = archive_ready(cfg.archive_path())
-        if not ok:
-            camera_ok = camera_ok  # unchanged
-            log.error("Archive not ready: %s", reason)
-            write_status(
-                cfg,
-                {
-                    "camera_ok": camera_ok,
-                    "archive_ok": False,
-                    "archive_error": reason,
-                    "last_capture_at": last_capture_at,
-                    "capture_fps": capture_fps,
-                    "free_gb": None,
-                },
-            )
-            time.sleep(max(cfg.capture.interval_seconds, 2.0))
-            continue
-
-        started = time.monotonic()
-        try:
-            jpeg = camera.capture_jpeg()
-            path = save_jpeg_bytes(
-                cfg.archive_path(),
-                jpeg,
-                cfg.latest_path(),
-                thumbs_dir=cfg.thumbs_dir(),
-            )
-            last_capture_at = datetime.now(timezone.utc).isoformat()
-            capture_times.append(time.monotonic())
-            capture_fps = measured_fps(capture_times)
-            camera_ok = True
-            deleted = enforce_min_free(cfg)
-            write_status(
-                cfg,
-                {
-                    "camera_ok": True,
-                    "archive_ok": True,
-                    "archive_error": None,
-                    "last_capture_at": last_capture_at,
-                    "last_capture_path": str(path),
-                    "capture_fps": capture_fps,
-                    "free_gb": round(free_gb(cfg.archive_path()), 3),
-                    "deleted_for_retention": deleted,
-                },
-            )
-        except CameraError as exc:
-            camera_ok = False
-            log.error("Capture failed: %s", exc)
-            write_status(
-                cfg,
-                {
-                    "camera_ok": False,
-                    "archive_ok": True,
-                    "last_error": str(exc),
-                    "last_capture_at": last_capture_at,
-                    "capture_fps": capture_fps,
-                    "free_gb": round(free_gb(cfg.archive_path()), 3),
-                },
-            )
-        except Exception as exc:
-            camera_ok = False
-            log.exception("Capture loop error")
-            write_status(
-                cfg,
-                {
-                    "camera_ok": False,
-                    "archive_ok": True,
-                    "last_error": str(exc),
-                    "last_capture_at": last_capture_at,
-                    "capture_fps": capture_fps,
-                    "free_gb": round(free_gb(cfg.archive_path()), 3),
-                },
-            )
-
-        elapsed = time.monotonic() - started
-        sleep_for = max(0.0, cfg.capture.interval_seconds - elapsed)
-        # Interruptible sleep for signals
-        end = time.monotonic() + sleep_for
-        while time.monotonic() < end and not _stop_requested and not _reload_requested:
-            time.sleep(min(0.25, end - time.monotonic()))
-
-    camera.close()
-    log.info("Capture daemon stopped")
+            elapsed = time.monotonic() - started
+            sleep_for = max(0.0, cfg.capture.interval_seconds - elapsed)
+            # Interruptible sleep for signals
+            end = time.monotonic() + sleep_for
+            while time.monotonic() < end and not _stop_requested and not _reload_requested:
+                time.sleep(min(0.25, end - time.monotonic()))
+    finally:
+        camera.close()
+        thumbs.close()
+        log.info("Capture daemon stopped")
 
 
 def main() -> None:

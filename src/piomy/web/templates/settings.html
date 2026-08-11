@@ -91,6 +91,17 @@
     </fieldset>
 
     <fieldset>
+      <legend>Appearance</legend>
+      <div class="row accent-row">
+        <label>Accent color
+          <input type="color" id="accent_color" name="accent_color" value="{{ cfg.web.accent_color }}">
+        </label>
+        <button type="button" id="accent_reset" class="secondary">Reset to green</button>
+      </div>
+      <p class="hint">Default green is <code>{{ default_accent_color }}</code>. Reset restores that value; Save to apply.</p>
+    </fieldset>
+
+    <fieldset>
       <legend>Web auth</legend>
       <label>New password (leave blank to keep)
         <input type="password" name="new_password" autocomplete="new-password">
@@ -130,4 +141,14 @@
 
     <button type="submit">Save</button>
   </form>
+  <script>
+    (function () {
+      const input = document.getElementById("accent_color");
+      const reset = document.getElementById("accent_reset");
+      if (!input || !reset) return;
+      reset.addEventListener("click", function () {
+        input.value = {{ default_accent_color|tojson }};
+      });
+    })();
+  </script>
 {% endblock %}

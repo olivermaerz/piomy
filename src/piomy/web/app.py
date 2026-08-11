@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from piomy.auth import hash_password, verify_password
-from piomy.config import AppConfig, load_config, save_config
+from piomy.config import DEFAULT_ACCENT_COLOR, AppConfig, load_config, save_config
 from piomy.storage import (
     PAGE_SIZE,
     archive_ready,
@@ -52,6 +52,17 @@ security = HTTPBasic(auto_error=False)
 
 def get_cfg() -> AppConfig:
     return load_config()
+
+
+def current_accent_color() -> str:
+    try:
+        return get_cfg().web.accent_color or DEFAULT_ACCENT_COLOR
+    except Exception:
+        return DEFAULT_ACCENT_COLOR
+
+
+templates.env.globals["accent_color"] = current_accent_color
+templates.env.globals["default_accent_color"] = DEFAULT_ACCENT_COLOR
 
 
 def require_auth(
@@ -429,6 +440,7 @@ def create_app() -> FastAPI:
         preview_w: Annotated[int, Form()] = 640,
         preview_h: Annotated[int, Form()] = 480,
         preview_enabled: Annotated[str, Form()] = "off",
+        accent_color: Annotated[str, Form()] = DEFAULT_ACCENT_COLOR,
         new_password: Annotated[str, Form()] = "",
         sync_enabled: Annotated[str, Form()] = "off",
         sync_interval_seconds: Annotated[int, Form()] = 60,
@@ -457,6 +469,7 @@ def create_app() -> FastAPI:
             )
             cfg.preview.resolution = [int(preview_w), int(preview_h)]
             cfg.preview.enabled = preview_enabled in ("on", "true", "1", "yes")
+            cfg.web.accent_color = (accent_color or DEFAULT_ACCENT_COLOR).strip()
             if new_password.strip():
                 cfg.web.password_hash = hash_password(new_password.strip())
             cfg.sync.enabled = sync_enabled in ("on", "true", "1", "yes")

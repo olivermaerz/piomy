@@ -41,6 +41,7 @@ header {
   padding: 0.85rem 1.25rem;
   border-bottom: 1px solid var(--border);
   background: rgba(20, 24, 22, 0.85);
+  -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   position: sticky;
   top: 0;
@@ -48,9 +49,26 @@ header {
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: lowercase;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.brand:hover {
+  text-decoration: none;
+  color: var(--accent);
+}
+
+.brand img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 nav {
@@ -198,6 +216,27 @@ button[type="submit"] {
 
 button[type="submit"]:hover {
   background: #356b40;
+}
+
+button.secondary {
+  align-self: end;
+  cursor: pointer;
+  background: var(--panel);
+}
+
+button.secondary:hover {
+  border-color: var(--accent);
+}
+
+.accent-row {
+  align-items: end;
+}
+
+.accent-row input[type="color"] {
+  width: 3.5rem;
+  height: 2.4rem;
+  padding: 0.15rem;
+  cursor: pointer;
 }
 
 .hint {

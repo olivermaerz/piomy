@@ -1,5 +1,9 @@
 # Pi-O-My
 
+<p align="center">
+  <img src="images/piomy-logo.webp" alt="Pi-O-My logo" width="160">
+</p>
+
 a security camera application for the Raspberry Pi.
 
 - Saves high-res stills to a **local USB SSD** (configurable path)

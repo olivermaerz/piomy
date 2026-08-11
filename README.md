@@ -93,9 +93,10 @@ Config: `/etc/piomy/config.yaml` (or set `PIOMY_CONFIG`).
 ## Samba sync
 
 1. Install `rclone` on the Pi: `sudo apt install -y rclone`
-2. Put the share password (password only, one line) in `/etc/piomy/smb.cred`, then make it readable by the `piomy` service user:
+2. Create `/etc/piomy/smb.cred` with the share password only (one line), then make it readable by the `piomy` service user:
 
 ```bash
+sudo sh -c 'printf "%s\n" "your-share-password" > /etc/piomy/smb.cred'
 sudo chown root:piomy /etc/piomy/smb.cred
 sudo chmod 640 /etc/piomy/smb.cred
 ```

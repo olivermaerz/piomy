@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 import uvicorn
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, status
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -61,7 +61,6 @@ def current_accent_color() -> str:
         return DEFAULT_ACCENT_COLOR
 
 
-templates.env.globals["accent_color"] = current_accent_color
 templates.env.globals["default_accent_color"] = DEFAULT_ACCENT_COLOR
 
 
@@ -99,6 +98,15 @@ def create_app() -> FastAPI:
     static_dir = PACKAGE_DIR / "static"
     static_dir.mkdir(exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+    @app.get("/theme.css")
+    def theme_css() -> Response:
+        accent = current_accent_color()
+        return Response(
+            content=f":root {{ --accent: {accent}; }}\n",
+            media_type="text/css; charset=utf-8",
+            headers={"Cache-Control": "no-store"},
+        )
 
     @app.get("/health")
     def health() -> dict[str, Any]:

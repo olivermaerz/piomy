@@ -3,14 +3,14 @@
   <div class="viewer-bar">
     <div class="viewer-nav">
       {% if older_rel %}
-      <a class="chip" id="nav-older" href="/view/{{ older_rel }}">&lt;- Older</a>
+      <a class="chip" id="nav-older" href="/view/{{ older_rel }}" title="Older">← Older</a>
       {% else %}
-      <span class="chip disabled">&lt;- Older</span>
+      <span class="chip disabled" title="Older">← Older</span>
       {% endif %}
       {% if newer_rel %}
-      <a class="chip" id="nav-newer" href="/view/{{ newer_rel }}">Newer -&gt;</a>
+      <a class="chip" id="nav-newer" href="/view/{{ newer_rel }}" title="Newer">Newer →</a>
       {% else %}
-      <span class="chip disabled">Newer -&gt;</span>
+      <span class="chip disabled" title="Newer">Newer →</span>
       {% endif %}
     </div>
     <div class="viewer-meta">

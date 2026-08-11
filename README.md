@@ -92,10 +92,23 @@ Config: `/etc/piomy/config.yaml` (or set `PIOMY_CONFIG`).
 
 ## Samba sync
 
-1. Install `rclone` on the Pi.
-2. Put the share password in `/etc/piomy/smb.cred` (`chmod 600`; readable by the service user).
+1. Install `rclone` on the Pi: `sudo apt install -y rclone`
+2. Put the share password (password only, one line) in `/etc/piomy/smb.cred`, then make it readable by the `piomy` service user:
+
+```bash
+sudo chown root:piomy /etc/piomy/smb.cred
+sudo chmod 640 /etc/piomy/smb.cred
+```
+
 3. In Settings: SMB URL (`//host/share/piomy`), username, enable sync, set remote `max_age_days`.
-4. Local archive is the source of truth; remote is a near-recent copy.
+4. Start / enable the sync unit (install already enables it; use this if you set up sync later):
+
+```bash
+sudo systemctl enable --now piomy-sync
+sudo systemctl status piomy-sync
+```
+
+5. Local archive is the source of truth; remote is a near-recent copy.
 
 ## Archive browsing
 

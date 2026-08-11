@@ -410,8 +410,23 @@ def paginate(items: list, page: int, page_size: int = PAGE_SIZE) -> tuple[list, 
     return items[start : start + page_size], page, total_pages
 
 
-def now_local_str() -> str:
-    return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+def cpu_temp_c(path: Path | None = None) -> float | None:
+    """Read SoC temperature in Celsius from sysfs, or None if unavailable."""
+    thermal = path or Path("/sys/class/thermal/thermal_zone0/temp")
+    try:
+        return round(int(thermal.read_text(encoding="utf-8").strip()) / 1000.0, 1)
+    except (OSError, ValueError):
+        return None
+
+
+def measured_fps(timestamps: list[float] | tuple[float, ...]) -> float | None:
+    """FPS from monotonic capture timestamps (needs at least two samples)."""
+    if len(timestamps) < 2:
+        return None
+    span = timestamps[-1] - timestamps[0]
+    if span <= 0:
+        return None
+    return round((len(timestamps) - 1) / span, 2)
 
 
 def write_status(cfg: AppConfig, payload: dict) -> None:

@@ -8,7 +8,13 @@ from pathlib import Path
 from PIL import Image
 
 from piomy.config import AppConfig, StorageConfig
-from piomy.storage import archive_ready, enforce_min_free, save_jpeg_bytes
+from piomy.storage import (
+    archive_ready,
+    cpu_temp_c,
+    enforce_min_free,
+    measured_fps,
+    save_jpeg_bytes,
+)
 
 
 def _jpeg(color: tuple[int, int, int] = (10, 20, 30)) -> bytes:
@@ -60,3 +66,18 @@ def test_min_free_respects_grace(tmp_path: Path, monkeypatch) -> None:
     assert deleted >= 1
     assert not old.exists()
     assert recent.exists()
+
+
+def test_cpu_temp_c(tmp_path: Path) -> None:
+    path = tmp_path / "temp"
+    path.write_text("48234\n", encoding="utf-8")
+    assert cpu_temp_c(path) == 48.2
+    assert cpu_temp_c(tmp_path / "missing") is None
+
+
+def test_measured_fps() -> None:
+    assert measured_fps([]) is None
+    assert measured_fps([1.0]) is None
+    assert measured_fps([1.0, 1.0]) is None
+    assert measured_fps([0.0, 1.0, 2.0]) == 1.0
+    assert measured_fps([0.0, 0.5, 1.0]) == 2.0

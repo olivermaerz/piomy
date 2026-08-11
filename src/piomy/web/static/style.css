@@ -133,8 +133,14 @@ main {
   margin: 0;
 }
 
-.day-list li {
-  margin: 0.35rem 0;
+.day-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.day-list a {
+  display: block;
 }
 
 .grid {

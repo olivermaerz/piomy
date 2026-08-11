@@ -32,13 +32,11 @@
   <div class="archive-layout">
     <aside>
       <h2>Days</h2>
-      <ul class="day-list">
-        {% for d in days %}
+      <ul class="day-list">{%- for d in days -%}
         <li><a href="/archive/{{ d }}"{% if d == day %} class="active"{% endif %}>{{ d }}</a></li>
-        {% else %}
+        {%- else -%}
         <li class="meta">No archived days yet.</li>
-        {% endfor %}
-      </ul>
+        {%- endfor -%}</ul>
     </aside>
 
     <section class="archive-main">

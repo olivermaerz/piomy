@@ -33,6 +33,7 @@ def test_validate_rejects_bad_interval() -> None:
 def test_accent_default_and_validation() -> None:
     cfg = AppConfig()
     assert cfg.web.accent_color == DEFAULT_ACCENT_COLOR
+    assert cfg.web.workers == 2
     validate(cfg)
     cfg.web.accent_color = "green"
     try:
@@ -43,3 +44,9 @@ def test_accent_default_and_validation() -> None:
     cfg.web.accent_color = "#AABBCC"
     validate(cfg)
     assert cfg.web.accent_color == "#aabbcc"
+    cfg.web.workers = 0
+    try:
+        validate(cfg)
+        assert False, "expected ValueError"
+    except ValueError:
+        pass

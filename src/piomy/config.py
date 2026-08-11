@@ -52,6 +52,7 @@ class WebConfig:
     port: int = 8080
     password_hash: str = ""
     accent_color: str = DEFAULT_ACCENT_COLOR
+    workers: int = 2
 
 
 @dataclass
@@ -164,6 +165,8 @@ def validate(cfg: AppConfig) -> None:
         raise ValueError("preview.resolution must be [width, height]")
     if cfg.web.port < 1 or cfg.web.port > 65535:
         raise ValueError("web.port out of range")
+    if cfg.web.workers < 1 or cfg.web.workers > 8:
+        raise ValueError("web.workers must be 1..8")
     accent = (cfg.web.accent_color or "").strip()
     if not _ACCENT_RE.match(accent):
         raise ValueError("web.accent_color must be a #RRGGBB hex color")

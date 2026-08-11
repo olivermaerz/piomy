@@ -67,6 +67,12 @@ sudo apt install -y git python3-picamera2 rclone curl
 sudo ./scripts/install.sh
 ```
 
+Later code updates (skips uv bootstrap / user setup / venv recreate):
+
+```bash
+sudo ./scripts/install.sh --update
+```
+
 The install venv uses `--system-site-packages` so apt's `picamera2` is importable.
 
 Default UI password after install: `changeme`. Change it under **Settings**.

@@ -31,9 +31,10 @@ from piomy.storage import (
     ensure_thumb,
     free_gb,
     hour_counts,
-    latest_image_rel,
+    latest_images_href,
     list_days,
     list_images_for_block,
+    neighbor_block,
     neighbor_rel,
     paginate,
     parse_day,
@@ -177,8 +178,6 @@ def create_app() -> FastAPI:
     ) -> HTMLResponse:
         archive = cfg.archive_path()
         days = list(reversed(list_days(archive)))
-        latest = latest_image_rel(archive)
-        latest_block = block_href(*block_from_rel(latest)[:3]) if latest and block_from_rel(latest) else None
         return templates.TemplateResponse(
             request,
             "archive.html",
@@ -195,8 +194,9 @@ def create_app() -> FastAPI:
                 page=1,
                 total_pages=1,
                 total_images=0,
-                latest_rel=latest,
-                latest_block=latest_block,
+                latest_images_href=latest_images_href(archive),
+                prev_block_href=None,
+                next_block_href=None,
             ),
         )
 
@@ -205,14 +205,10 @@ def create_app() -> FastAPI:
         user: Annotated[str, Depends(require_auth)],
         cfg: Annotated[AppConfig, Depends(get_cfg)],
     ) -> RedirectResponse:
-        latest = latest_image_rel(cfg.archive_path())
-        if not latest:
+        href = latest_images_href(cfg.archive_path())
+        if not href:
             return RedirectResponse("/archive", status_code=303)
-        info = block_from_rel(latest)
-        if info is None:
-            return RedirectResponse("/archive", status_code=303)
-        day, hour, mb = info
-        return RedirectResponse(block_href(day, hour, mb), status_code=303)
+        return RedirectResponse(href, status_code=303)
 
     @app.get("/archive/{day}", response_class=HTMLResponse)
     def archive_day(
@@ -240,8 +236,9 @@ def create_app() -> FastAPI:
                 page=1,
                 total_pages=1,
                 total_images=sum(c for _, c in hours),
-                latest_rel=None,
-                latest_block=None,
+                latest_images_href=latest_images_href(cfg.archive_path()),
+                prev_block_href=None,
+                next_block_href=None,
             ),
         )
 
@@ -278,8 +275,9 @@ def create_app() -> FastAPI:
                 page=1,
                 total_pages=1,
                 total_images=sum(c for _, c in blocks),
-                latest_rel=None,
-                latest_block=None,
+                latest_images_href=latest_images_href(cfg.archive_path()),
+                prev_block_href=None,
+                next_block_href=None,
             ),
         )
 
@@ -302,20 +300,23 @@ def create_app() -> FastAPI:
             raise HTTPException(404, "Bad time") from exc
         if hour_i < 0 or hour_i > 23 or mb < 0 or mb > 50:
             raise HTTPException(404, "Bad time")
-        all_imgs = list_images_for_block(cfg.archive_path(), day, hour_i, mb)
+        archive = cfg.archive_path()
+        all_imgs = list_images_for_block(archive, day, hour_i, mb)
         page_items, page, total_pages = paginate(all_imgs, page, PAGE_SIZE)
-        rels = [rel_to_archive(cfg.archive_path(), p) for p in page_items]
+        rels = [rel_to_archive(archive, p) for p in page_items]
         end_m = mb + 9
+        prev_b = neighbor_block(archive, day, hour_i, mb, newer=False)
+        next_b = neighbor_block(archive, day, hour_i, mb, newer=True)
         return templates.TemplateResponse(
             request,
             "archive.html",
             _archive_ctx(
                 title=f"Archive {day} {hour_i:02d}:{mb:02d}",
                 level="block",
-                days=list(reversed(list_days(cfg.archive_path()))),
+                days=list(reversed(list_days(archive))),
                 day=day,
-                hours=hour_counts(cfg.archive_path(), day),
-                blocks=block_counts(cfg.archive_path(), day, hour_i),
+                hours=hour_counts(archive, day),
+                blocks=block_counts(archive, day, hour_i),
                 images=rels,
                 hour=hour_i,
                 minute_block=mb,
@@ -323,8 +324,9 @@ def create_app() -> FastAPI:
                 page=page,
                 total_pages=total_pages,
                 total_images=len(all_imgs),
-                latest_rel=None,
-                latest_block=None,
+                latest_images_href=latest_images_href(archive),
+                prev_block_href=block_href(*prev_b) if prev_b else None,
+                next_block_href=block_href(*next_b) if next_b else None,
                 prev_page_href=block_href(day, hour_i, mb, page - 1) if page > 1 else None,
                 next_page_href=block_href(day, hour_i, mb, page + 1)
                 if page < total_pages

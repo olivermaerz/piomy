@@ -93,7 +93,7 @@ Day -> hour -> 10-minute block -> paged thumbs (60/page).
 
 Open a frame for Older / Newer (crosses days). Arrow keys work; neighbors are prefetched.
 
-**Latest block** jumps to the newest 10-minute window.
+**Latest images** jumps to the last page of the newest 10-minute block.
 
 ## Layout
 

@@ -109,3 +109,28 @@ def test_neighbor_block_crosses_hours_and_days(tmp_path: Path) -> None:
     )
     assert neighbor_block(archive, "2026-08-10", 0, 10, newer=True) is None
     assert neighbor_block(archive, "2026-08-09", 23, 50, newer=False) is None
+
+
+def test_neighbor_block_none_on_latest(tmp_path: Path) -> None:
+    archive = tmp_path / "archive"
+    _touch_jpeg(archive / "2026" / "08" / "11" / "101500_000001.jpg")
+    _touch_jpeg(archive / "2026" / "08" / "11" / "102500_000001.jpg")
+    _touch_jpeg(archive / "2026" / "08" / "11" / "102800_000001.jpg")
+
+    assert neighbor_block(archive, "2026-08-11", 10, 20, newer=True) is None
+    assert neighbor_block(archive, "2026-08-11", 10, 20, newer=False) == (
+        "2026-08-11",
+        10,
+        10,
+    )
+    # Empty URL slot between two real blocks still finds neighbors
+    assert neighbor_block(archive, "2026-08-11", 10, 30, newer=False) == (
+        "2026-08-11",
+        10,
+        20,
+    )
+    assert neighbor_block(archive, "2026-08-11", 10, 0, newer=True) == (
+        "2026-08-11",
+        10,
+        10,
+    )

@@ -157,6 +157,6 @@ echo "==> Done (${MODE})"
 echo "UI: http://$(hostname -I | awk '{print $1}'):8080  (user any, password changeme unless changed)"
 if [[ "${MODE}" == "install" ]]; then
   echo "Mount your SSD at ${ARCHIVE_DIR} (or change storage.archive_dir in Settings)."
-  echo "For Samba sync: apt install rclone; put password in ${CONFIG_DIR}/smb.cred (chmod 600); enable in Settings."
+  echo "For Samba sync: apt install rclone; password in ${CONFIG_DIR}/smb.cred (chown root:piomy, chmod 640); enable in Settings; systemctl enable --now piomy-sync"
 fi
 echo "Later updates: sudo ./scripts/install.sh --update"

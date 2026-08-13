@@ -386,42 +386,50 @@ def parse_image_name(name: str) -> tuple[int, int, int, int] | None:
 
 
 def list_images_for_day(archive_dir: Path, day: str) -> list[Path]:
-    """day format YYYY-MM-DD, sorted by filename (time order)."""
+    """day format YYYY-MM-DD, sorted by filename (time order). One directory scan."""
     folder = day_folder(archive_dir, day)
     if folder is None:
         return []
-    files = [
-        p
-        for p in folder.iterdir()
-        if p.is_file()
-        and p.suffix == JPEG_SUFFIX
-        and not p.name.startswith(".")
-        and parse_image_name(p.name) is not None
-    ]
+    files: list[Path] = []
+    try:
+        with os.scandir(folder) as entries:
+            for entry in entries:
+                if parse_image_name(entry.name) is None:
+                    continue
+                if not entry.is_file(follow_symlinks=False):
+                    continue
+                files.append(Path(entry.path))
+    except OSError:
+        return []
     files.sort(key=lambda p: p.name)
     return files
 
 
-def hour_counts(archive_dir: Path, day: str) -> list[tuple[int, int]]:
-    """List (hour, count) for hours that have images."""
+def hour_counts_from(files: list[Path]) -> list[tuple[int, int]]:
+    """List (hour, count) from an already-scanned day listing."""
     counts = [0] * 24
-    for path in list_images_for_day(archive_dir, day):
+    for path in files:
         parsed = parse_image_name(path.name)
         if parsed:
             counts[parsed[0]] += 1
     return [(h, c) for h, c in enumerate(counts) if c > 0]
 
 
+def hour_counts(archive_dir: Path, day: str) -> list[tuple[int, int]]:
+    """List (hour, count) for hours that have images."""
+    return hour_counts_from(list_images_for_day(archive_dir, day))
+
+
 def block_minute(minute: int) -> int:
     return (minute // BLOCK_MINUTES) * BLOCK_MINUTES
 
 
-def block_counts(archive_dir: Path, day: str, hour: int) -> list[tuple[int, int]]:
-    """List (block_start_minute, count) for a given hour."""
+def block_counts_from(files: list[Path], hour: int) -> list[tuple[int, int]]:
+    """List (block_start_minute, count) from an already-scanned day listing."""
     if hour < 0 or hour > 23:
         return []
     counts = {m: 0 for m in range(0, 60, BLOCK_MINUTES)}
-    for path in list_images_for_day(archive_dir, day):
+    for path in files:
         parsed = parse_image_name(path.name)
         if not parsed or parsed[0] != hour:
             continue
@@ -429,22 +437,56 @@ def block_counts(archive_dir: Path, day: str, hour: int) -> list[tuple[int, int]
     return [(m, counts[m]) for m in range(0, 60, BLOCK_MINUTES) if counts[m] > 0]
 
 
-def list_images_for_block(
-    archive_dir: Path, day: str, hour: int, minute_block: int
+def block_counts(archive_dir: Path, day: str, hour: int) -> list[tuple[int, int]]:
+    """List (block_start_minute, count) for a given hour."""
+    return block_counts_from(list_images_for_day(archive_dir, day), hour)
+
+
+def images_in_block_from(
+    files: list[Path], hour: int, minute_block: int
 ) -> list[Path]:
-    """Images in [hour:minute_block, hour:minute_block+10), sorted oldest-first."""
+    """Images in [hour:minute_block, hour:minute_block+10) from a day listing."""
     if hour < 0 or hour > 23:
         return []
     minute_block = block_minute(minute_block)
     end = minute_block + BLOCK_MINUTES
     out: list[Path] = []
-    for path in list_images_for_day(archive_dir, day):
+    for path in files:
         parsed = parse_image_name(path.name)
         if not parsed:
             continue
         h, mi, _s, _us = parsed
         if h == hour and minute_block <= mi < end:
             out.append(path)
+    return out
+
+
+def list_images_for_block(
+    archive_dir: Path,
+    day: str,
+    hour: int,
+    minute_block: int,
+    *,
+    files: list[Path] | None = None,
+) -> list[Path]:
+    """Images in [hour:minute_block, hour:minute_block+10), sorted oldest-first."""
+    imgs = files if files is not None else list_images_for_day(archive_dir, day)
+    return images_in_block_from(imgs, hour, minute_block)
+
+
+def _blocks_from_files(files: list[Path], day: str) -> list[tuple[str, int, int]]:
+    """Unique (day, hour, minute_block) in time order from a day listing."""
+    out: list[tuple[str, int, int]] = []
+    seen: set[tuple[str, int, int]] = set()
+    for path in files:
+        parsed = parse_image_name(path.name)
+        if not parsed:
+            continue
+        h, mi, _s, _us = parsed
+        key = (day, h, block_minute(mi))
+        if key not in seen:
+            seen.add(key)
+            out.append(key)
     return out
 
 
@@ -486,16 +528,80 @@ def block_href(day: str, hour: int, minute_block: int, page: int = 1) -> str:
 
 def latest_images_href(archive_dir: Path, page_size: int = PAGE_SIZE) -> str | None:
     """Href to the last page of the newest non-empty 10-minute block."""
-    latest = latest_image_rel(archive_dir)
-    if latest is None:
-        return None
-    info = block_from_rel(latest)
-    if info is None:
-        return None
-    day, hour, mb = info
-    imgs = list_images_for_block(archive_dir, day, hour, mb)
-    _, _, total_pages = paginate(imgs, 1, page_size)
-    return block_href(day, hour, mb, total_pages)
+    days = list_days(archive_dir)
+    for day in reversed(days):
+        files = list_images_for_day(archive_dir, day)
+        if not files:
+            continue
+        parsed = parse_image_name(files[-1].name)
+        if parsed is None:
+            continue
+        hour, minute, _s, _us = parsed
+        mb = block_minute(minute)
+        imgs = images_in_block_from(files, hour, mb)
+        _, _, total_pages = paginate(imgs, 1, page_size)
+        return block_href(day, hour, mb, total_pages)
+    return None
+
+
+def neighbor_blocks(
+    archive_dir: Path,
+    day: str,
+    hour: int,
+    minute_block: int,
+    *,
+    files: list[Path] | None = None,
+    days: list[str] | None = None,
+) -> tuple[tuple[str, int, int] | None, tuple[str, int, int] | None]:
+    """Previous and next non-empty blocks, crossing hours/days. One scan of `day`."""
+    key = (day, hour, block_minute(minute_block))
+    days = list(days) if days is not None else list_days(archive_dir)
+    if not days:
+        return None, None
+
+    if files is not None:
+        current = files
+    elif day in days:
+        current = list_images_for_day(archive_dir, day)
+    else:
+        current = []
+
+    prev: tuple[str, int, int] | None = None
+    nxt: tuple[str, int, int] | None = None
+    for cand in _blocks_from_files(current, day):
+        if cand < key:
+            prev = cand
+        elif cand > key:
+            nxt = cand
+            break
+
+    if prev is None:
+        if day in days:
+            end = days.index(day)
+        else:
+            end = 0
+            while end < len(days) and days[end] < day:
+                end += 1
+        for d in reversed(days[:end]):
+            earlier = _blocks_from_files(list_images_for_day(archive_dir, d), d)
+            if earlier:
+                prev = earlier[-1]
+                break
+
+    if nxt is None:
+        if day in days:
+            start = days.index(day) + 1
+        else:
+            start = 0
+            while start < len(days) and days[start] <= day:
+                start += 1
+        for d in days[start:]:
+            later = _blocks_from_files(list_images_for_day(archive_dir, d), d)
+            if later:
+                nxt = later[0]
+                break
+
+    return prev, nxt
 
 
 def neighbor_block(
@@ -505,51 +611,14 @@ def neighbor_block(
     minute_block: int,
     *,
     newer: bool,
+    files: list[Path] | None = None,
+    days: list[str] | None = None,
 ) -> tuple[str, int, int] | None:
     """Adjacent non-empty block as (day, hour, minute_block), crossing hours/days."""
-    mb = block_minute(minute_block)
-    key = (day, hour, mb)
-    days = list_days(archive_dir)
-    if not days:
-        return None
-
-    def blocks_for_day(d: str) -> list[tuple[str, int, int]]:
-        out: list[tuple[str, int, int]] = []
-        for h, _c in hour_counts(archive_dir, d):
-            for block_m, _bc in block_counts(archive_dir, d, h):
-                out.append((d, h, block_m))
-        return out
-
-    if newer:
-        if day in days:
-            for cand in blocks_for_day(day):
-                if cand > key:
-                    return cand
-            start = days.index(day) + 1
-        else:
-            start = 0
-            while start < len(days) and days[start] < day:
-                start += 1
-        for d in days[start:]:
-            later = blocks_for_day(d)
-            if later:
-                return later[0]
-        return None
-
-    if day in days:
-        earlier = [cand for cand in blocks_for_day(day) if cand < key]
-        if earlier:
-            return earlier[-1]
-        end = days.index(day)
-    else:
-        end = 0
-        while end < len(days) and days[end] < day:
-            end += 1
-    for d in reversed(days[:end]):
-        earlier_day = blocks_for_day(d)
-        if earlier_day:
-            return earlier_day[-1]
-    return None
+    prev, nxt = neighbor_blocks(
+        archive_dir, day, hour, minute_block, files=files, days=days
+    )
+    return nxt if newer else prev
 
 
 def display_time_from_rel(rel: str) -> str:
@@ -561,42 +630,55 @@ def display_time_from_rel(rel: str) -> str:
     return f"{day} {h:02d}:{mi:02d}:{s:02d}"
 
 
-def neighbor_rel(archive_dir: Path, rel: str, newer: bool) -> str | None:
-    """Next/previous frame by time. Crosses day boundaries when needed."""
+def neighbor_rels(
+    archive_dir: Path,
+    rel: str,
+    *,
+    files: list[Path] | None = None,
+    days: list[str] | None = None,
+) -> tuple[str | None, str | None]:
+    """Older and newer frame paths. One scan of the current day."""
     path = resolve_under_archive(archive_dir, rel)
     if path is None:
-        return None
+        return None, None
     day = day_from_rel(rel)
     if day is None:
-        return None
-    days = list_days(archive_dir)
+        return None, None
+    days = list(days) if days is not None else list_days(archive_dir)
     if day not in days:
-        return None
+        return None, None
     day_idx = days.index(day)
-    files = list_images_for_day(archive_dir, day)
+    files = files if files is not None else list_images_for_day(archive_dir, day)
     names = [p.name for p in files]
     try:
         idx = names.index(path.name)
     except ValueError:
-        return None
+        return None, None
 
-    if newer:
-        if idx + 1 < len(files):
-            return rel_to_archive(archive_dir, files[idx + 1])
-        # first of next day
-        if day_idx + 1 < len(days):
-            nxt = list_images_for_day(archive_dir, days[day_idx + 1])
-            if nxt:
-                return rel_to_archive(archive_dir, nxt[0])
-        return None
-
+    older: str | None
     if idx > 0:
-        return rel_to_archive(archive_dir, files[idx - 1])
-    if day_idx > 0:
+        older = rel_to_archive(archive_dir, files[idx - 1])
+    elif day_idx > 0:
         prev_files = list_images_for_day(archive_dir, days[day_idx - 1])
-        if prev_files:
-            return rel_to_archive(archive_dir, prev_files[-1])
-    return None
+        older = rel_to_archive(archive_dir, prev_files[-1]) if prev_files else None
+    else:
+        older = None
+
+    newer: str | None
+    if idx + 1 < len(files):
+        newer = rel_to_archive(archive_dir, files[idx + 1])
+    elif day_idx + 1 < len(days):
+        nxt = list_images_for_day(archive_dir, days[day_idx + 1])
+        newer = rel_to_archive(archive_dir, nxt[0]) if nxt else None
+    else:
+        newer = None
+    return older, newer
+
+
+def neighbor_rel(archive_dir: Path, rel: str, newer: bool) -> str | None:
+    """Next/previous frame by time. Crosses day boundaries when needed."""
+    older, newer_rel = neighbor_rels(archive_dir, rel)
+    return newer_rel if newer else older
 
 
 def latest_image_rel(archive_dir: Path) -> str | None:

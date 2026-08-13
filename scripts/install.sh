@@ -121,7 +121,19 @@ print("Default web password: changeme  (change it in the UI)")
 PY
 fi
 
-chown -R "${SERVICE_USER}:${SERVICE_USER}" "${DATA_DIR}" "${ARCHIVE_DIR}"
+echo "==> Stopping services"
+systemctl stop piomy-capture.service piomy-web.service piomy-sync.service 2>/dev/null || true
+
+echo "==> Setting data ownership"
+# Capture writes foo.jpg.tmp then renames; chown -R racing that fails with ENOENT.
+chown "${SERVICE_USER}:${SERVICE_USER}" "${DATA_DIR}" "${ARCHIVE_DIR}"
+if [[ "${MODE}" == "install" ]]; then
+  chown -R "${SERVICE_USER}:${SERVICE_USER}" "${DATA_DIR}"
+  case "${ARCHIVE_DIR}" in
+    "${DATA_DIR}"|"${DATA_DIR}"/*) ;;
+    *) chown -R "${SERVICE_USER}:${SERVICE_USER}" "${ARCHIVE_DIR}" ;;
+  esac
+fi
 chown root:"${SERVICE_USER}" "${CONFIG_DIR}"
 chmod 775 "${CONFIG_DIR}"
 chmod 660 "${CONFIG_DIR}/config.yaml"

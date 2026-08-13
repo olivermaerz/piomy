@@ -26,6 +26,7 @@ JPEG_SUFFIX = ".jpg"
 NAME_RE = re.compile(r"^(\d{2})(\d{2})(\d{2})_(\d{6})\.jpg$")
 BLOCK_MINUTES = 10
 PAGE_SIZE = 60
+RETENTION_CHECK_EVERY = 100
 
 
 def archive_ready(archive_dir: Path) -> tuple[bool, str]:
@@ -226,8 +227,46 @@ def iter_archive_jpegs(archive_dir: Path) -> list[Path]:
     return results
 
 
+def _resolved_under(root: Path, candidate: Path) -> Path | None:
+    """Return candidate resolved if it is a strict subdirectory of root."""
+    try:
+        root_r = root.resolve()
+        cand_r = candidate.resolve()
+        cand_r.relative_to(root_r)
+    except (OSError, ValueError):
+        return None
+    if cand_r == root_r:
+        return None
+    return cand_r
+
+
+def _rmtree_under(root: Path, candidate: Path) -> bool:
+    target = _resolved_under(root, candidate)
+    if target is None or not target.is_dir():
+        return False
+    shutil.rmtree(target)
+    return True
+
+
+def _prune_empty_parents(archive_dir: Path, day_folder_path: Path) -> None:
+    """Remove empty month/year dirs left after deleting a day folder."""
+    try:
+        archive_root = archive_dir.resolve()
+    except OSError:
+        return
+    for parent in (day_folder_path.parent, day_folder_path.parent.parent):
+        try:
+            resolved = parent.resolve()
+            resolved.relative_to(archive_root)
+            if resolved == archive_root:
+                break
+            resolved.rmdir()
+        except OSError:
+            break
+
+
 def enforce_min_free(cfg: AppConfig) -> int:
-    """Delete oldest archive files until min_free_gb is met. Returns deleted count."""
+    """Delete oldest day folders until min_free_gb is met. Returns days deleted."""
     archive_dir = cfg.archive_path()
     ok, reason = archive_ready(archive_dir)
     if not ok:
@@ -235,34 +274,64 @@ def enforce_min_free(cfg: AppConfig) -> int:
         return 0
 
     min_free = int(cfg.storage.min_free_gb * (1024**3))
+    if free_bytes(archive_dir) >= min_free:
+        return 0
+
     grace = cfg.storage.delete_grace_minutes * 60
     now = time.time()
     deleted = 0
+    thumbs_root = cfg.thumbs_dir()
 
     while free_bytes(archive_dir) < min_free:
-        candidates = [
-            p
-            for p in iter_archive_jpegs(archive_dir)
-            if now - p.stat().st_mtime >= grace
-        ]
-        if not candidates:
+        days = list_days(archive_dir)
+        if len(days) < 2:
             log.warning(
-                "Free space %.2f GiB below min %.2f GiB but no deletable files "
+                "Free space %.2f GiB below min %.2f GiB but no older day to delete",
+                free_gb(archive_dir),
+                cfg.storage.min_free_gb,
+            )
+            break
+
+        victim_day = None
+        victim_folder = None
+        for day in days[:-1]:
+            folder = day_folder(archive_dir, day)
+            if folder is None:
+                continue
+            try:
+                if now - folder.stat().st_mtime < grace:
+                    continue
+            except OSError:
+                continue
+            victim_day = day
+            victim_folder = folder
+            break
+
+        if victim_folder is None:
+            log.warning(
+                "Free space %.2f GiB below min %.2f GiB but no deletable day "
                 "(grace=%dm)",
                 free_gb(archive_dir),
                 cfg.storage.min_free_gb,
                 cfg.storage.delete_grace_minutes,
             )
             break
-        victim = candidates[0]
+
+        parsed = parse_day(victim_day)
         try:
-            thumb = thumb_path_for(victim, cfg.thumbs_dir(), archive_dir)
-            victim.unlink(missing_ok=True)
-            thumb.unlink(missing_ok=True)
-            deleted += 1
-            log.info("Deleted old archive file %s", victim)
+            removed = _rmtree_under(archive_dir, victim_folder)
+            if parsed is not None:
+                y, m, d = parsed
+                _rmtree_under(archive_dir, thumbs_root / y / m / d)
+            if removed:
+                _prune_empty_parents(archive_dir, victim_folder)
+                deleted += 1
+                log.info("Deleted old archive day %s", victim_day)
+            else:
+                log.error("Refused to delete %s (not under archive)", victim_folder)
+                break
         except OSError:
-            log.exception("Failed deleting %s", victim)
+            log.exception("Failed deleting day folder %s", victim_folder)
             break
 
     return deleted

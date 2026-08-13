@@ -9,7 +9,7 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
-from piomy.config import CaptureConfig, PreviewConfig
+from piomy.config import CaptureConfig
 
 log = logging.getLogger(__name__)
 
@@ -19,13 +19,10 @@ class CameraError(RuntimeError):
 
 
 class BaseCamera:
-    def configure(self, capture: CaptureConfig, preview: PreviewConfig) -> None:
+    def configure(self, capture: CaptureConfig) -> None:
         raise NotImplementedError
 
     def capture_jpeg(self) -> bytes:
-        raise NotImplementedError
-
-    def capture_preview_jpeg(self) -> bytes:
         raise NotImplementedError
 
     def close(self) -> None:
@@ -37,12 +34,10 @@ class MockCamera(BaseCamera):
 
     def __init__(self) -> None:
         self._capture = CaptureConfig()
-        self._preview = PreviewConfig()
         self._n = 0
 
-    def configure(self, capture: CaptureConfig, preview: PreviewConfig) -> None:
+    def configure(self, capture: CaptureConfig) -> None:
         self._capture = capture
-        self._preview = preview
         log.warning("Using MockCamera (picamera2 not available)")
 
     def _frame(self, size: tuple[int, int], label: str) -> bytes:
@@ -60,10 +55,6 @@ class MockCamera(BaseCamera):
         w, h = self._capture.resolution
         return self._frame((w, h), "archive")
 
-    def capture_preview_jpeg(self) -> bytes:
-        w, h = self._preview.resolution
-        return self._frame((w, h), "preview")
-
 
 class PiCamera(BaseCamera):
     def __init__(self) -> None:
@@ -76,11 +67,9 @@ class PiCamera(BaseCamera):
         self._Transform = Transform
         self._picam: Any = None
         self._capture = CaptureConfig()
-        self._preview = PreviewConfig()
 
-    def configure(self, capture: CaptureConfig, preview: PreviewConfig) -> None:
+    def configure(self, capture: CaptureConfig) -> None:
         self._capture = capture
-        self._preview = preview
         if self._picam is not None:
             try:
                 self._picam.stop()
@@ -95,13 +84,11 @@ class PiCamera(BaseCamera):
         picam = self._Picamera2()
         transform = self._transform_for(capture.rotation)
         still_w, still_h = capture.resolution
-        prev_w, prev_h = preview.resolution
 
         # On Pi, RGB888 buffers are BGR in memory. Prefer capture_file for JPEG;
         # the array path swaps channels for Pillow.
         config = picam.create_still_configuration(
             main={"size": (still_w, still_h), "format": "RGB888"},
-            lores={"size": (prev_w, prev_h), "format": "YUV420"},
             transform=transform,
             buffer_count=2,
         )
@@ -111,11 +98,9 @@ class PiCamera(BaseCamera):
         time.sleep(0.3)  # let auto-exposure settle
         self._picam = picam
         log.info(
-            "Camera started still=%sx%s preview=%sx%s rotation=%s mode=%s",
+            "Camera started still=%sx%s rotation=%s mode=%s",
             still_w,
             still_h,
-            prev_w,
-            prev_h,
             capture.rotation,
             capture.exposure_mode,
         )
@@ -177,16 +162,6 @@ class PiCamera(BaseCamera):
         img = self._array_to_rgb_image(arr)
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=self._capture.jpeg_quality, optimize=True)
-        return buf.getvalue()
-
-    def capture_preview_jpeg(self) -> bytes:
-        if self._picam is None:
-            raise CameraError("Camera not configured")
-        arr = self._picam.capture_array("main")
-        img = self._array_to_rgb_image(arr)
-        img.thumbnail(tuple(self._preview.resolution))
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=70)
         return buf.getvalue()
 
     def close(self) -> None:

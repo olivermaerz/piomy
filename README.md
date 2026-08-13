@@ -7,7 +7,7 @@
 a security camera application for the Raspberry Pi.
 
 - Saves high-res stills to a **local USB SSD** (configurable path)
-- Rotates by **minimum free space** (with a recent-file grace window)
+- Rotates by **minimum free space**: every 100 captures, deletes the oldest day folder if needed (skips today and a recent-day grace window)
 - Live **MJPEG** preview and archive browser (LAN, password auth)
 - Optional **Samba sync** via `rclone` (near-recent remote copy, not realtime)
 
@@ -89,6 +89,8 @@ curl -u :changeme http://PI_IP:8080/health
 ```
 
 Config: `/etc/piomy/config.yaml` (or set `PIOMY_CONFIG`).
+
+On a Pi 3 (1 GiB RAM), keep `web.workers: 1` (the default). Extra uvicorn workers often get OOM-killed and respawn in a loop (`Child process ... died`). Use `workers: 2` only if you have spare RAM (e.g. Pi 4/5).
 
 ## Samba sync
 

@@ -61,7 +61,7 @@ def test_thumb_worker_async(tmp_path: Path) -> None:
         worker.close(timeout=10)
 
 
-def test_min_free_respects_grace(tmp_path: Path, monkeypatch) -> None:
+def test_min_free_deletes_oldest_day(tmp_path: Path, monkeypatch) -> None:
     archive = tmp_path / "archive"
     archive.mkdir()
     cfg = AppConfig(
@@ -72,22 +72,60 @@ def test_min_free_respects_grace(tmp_path: Path, monkeypatch) -> None:
         )
     )
 
-    day = archive / "2026" / "08" / "01"
-    day.mkdir(parents=True)
-    old = day / "120000_000001.jpg"
-    recent = day / "120100_000001.jpg"
+    old_day = archive / "2026" / "08" / "01"
+    new_day = archive / "2026" / "08" / "02"
+    old_thumbs = archive / ".thumbs" / "2026" / "08" / "01"
+    old_day.mkdir(parents=True)
+    new_day.mkdir(parents=True)
+    old_thumbs.mkdir(parents=True)
+    old = old_day / "120000_000001.jpg"
+    thumb = old_thumbs / "120000_000001.jpg"
+    recent = new_day / "120100_000001.jpg"
     old.write_bytes(_jpeg((1, 0, 0)))
+    thumb.write_bytes(_jpeg((1, 0, 0)))
     recent.write_bytes(_jpeg((0, 1, 0)))
 
     now = time.time()
     os.utime(old, (now - 7200, now - 7200))
+    os.utime(old_day, (now - 7200, now - 7200))
     os.utime(recent, (now - 10, now - 10))
+    os.utime(new_day, (now - 10, now - 10))
 
     monkeypatch.setattr("piomy.storage.free_bytes", lambda p: 0)
     deleted = enforce_min_free(cfg)
-    assert deleted >= 1
-    assert not old.exists()
+    assert deleted == 1
+    assert not old_day.exists()
+    assert not old_thumbs.exists()
     assert recent.exists()
+
+
+def test_min_free_skips_day_within_grace(tmp_path: Path, monkeypatch) -> None:
+    archive = tmp_path / "archive"
+    archive.mkdir()
+    cfg = AppConfig(
+        storage=StorageConfig(
+            archive_dir=str(archive),
+            min_free_gb=1000,
+            delete_grace_minutes=60,
+        )
+    )
+
+    older = archive / "2026" / "08" / "01"
+    newest = archive / "2026" / "08" / "02"
+    older.mkdir(parents=True)
+    newest.mkdir(parents=True)
+    (older / "120000_000001.jpg").write_bytes(_jpeg((1, 0, 0)))
+    (newest / "120100_000001.jpg").write_bytes(_jpeg((0, 1, 0)))
+
+    now = time.time()
+    os.utime(older, (now - 10, now - 10))
+    os.utime(newest, (now - 5, now - 5))
+
+    monkeypatch.setattr("piomy.storage.free_bytes", lambda p: 0)
+    deleted = enforce_min_free(cfg)
+    assert deleted == 0
+    assert older.exists()
+    assert newest.exists()
 
 
 def test_cpu_temp_c(tmp_path: Path) -> None:

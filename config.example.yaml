@@ -14,13 +14,12 @@ capture:
   analogue_gain: null
 
 preview:
-  resolution: [640, 480]
   enabled: true
 
 web:
   host: 0.0.0.0
   port: 8080
-  workers: 2
+  workers: 1
   accent_color: "#6fbf7a"
   # Generate with: uv run python -c "from piomy.auth import hash_password; print(hash_password('changeme'))"
   password_hash: ""

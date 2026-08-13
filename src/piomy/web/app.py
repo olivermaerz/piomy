@@ -21,7 +21,7 @@ from piomy.config import DEFAULT_ACCENT_COLOR, AppConfig, load_config, save_conf
 from piomy.storage import (
     PAGE_SIZE,
     archive_ready,
-    block_counts,
+    block_counts_from,
     block_from_rel,
     block_href,
     block_minute,
@@ -30,12 +30,13 @@ from piomy.storage import (
     display_time_from_rel,
     ensure_thumb,
     free_gb,
-    hour_counts,
+    hour_counts_from,
+    images_in_block_from,
     latest_images_href,
     list_days,
-    list_images_for_block,
-    neighbor_block,
-    neighbor_rel,
+    list_images_for_day,
+    neighbor_blocks,
+    neighbor_rels,
     paginate,
     parse_day,
     read_status,
@@ -87,6 +88,7 @@ def require_auth(
 
 
 def _archive_ctx(**extra: Any) -> dict[str, Any]:
+    extra.setdefault("latest_images_href", "/archive/latest")
     return {
         "page_size": PAGE_SIZE,
         **extra,
@@ -213,7 +215,6 @@ def create_app() -> FastAPI:
                 page=1,
                 total_pages=1,
                 total_images=0,
-                latest_images_href=latest_images_href(archive),
                 prev_block_href=None,
                 next_block_href=None,
             ),
@@ -238,14 +239,17 @@ def create_app() -> FastAPI:
     ) -> HTMLResponse:
         if parse_day(day) is None or day_folder(cfg.archive_path(), day) is None:
             raise HTTPException(404, "Day not found")
-        hours = hour_counts(cfg.archive_path(), day)
+        archive = cfg.archive_path()
+        files = list_images_for_day(archive, day)
+        hours = hour_counts_from(files)
+        days = list(reversed(list_days(archive)))
         return templates.TemplateResponse(
             request,
             "archive.html",
             _archive_ctx(
                 title=f"Archive {day}",
                 level="day",
-                days=list(reversed(list_days(cfg.archive_path()))),
+                days=days,
                 day=day,
                 hours=hours,
                 blocks=[],
@@ -255,7 +259,6 @@ def create_app() -> FastAPI:
                 page=1,
                 total_pages=1,
                 total_images=sum(c for _, c in hours),
-                latest_images_href=latest_images_href(cfg.archive_path()),
                 prev_block_href=None,
                 next_block_href=None,
             ),
@@ -277,16 +280,19 @@ def create_app() -> FastAPI:
             raise HTTPException(404, "Bad hour") from exc
         if hour_i < 0 or hour_i > 23:
             raise HTTPException(404, "Bad hour")
-        blocks = block_counts(cfg.archive_path(), day, hour_i)
+        archive = cfg.archive_path()
+        files = list_images_for_day(archive, day)
+        hours = hour_counts_from(files)
+        blocks = block_counts_from(files, hour_i)
         return templates.TemplateResponse(
             request,
             "archive.html",
             _archive_ctx(
                 title=f"Archive {day} {hour_i:02d}:00",
                 level="hour",
-                days=list(reversed(list_days(cfg.archive_path()))),
+                days=list(reversed(list_days(archive))),
                 day=day,
-                hours=hour_counts(cfg.archive_path(), day),
+                hours=hours,
                 blocks=blocks,
                 images=[],
                 hour=hour_i,
@@ -294,7 +300,6 @@ def create_app() -> FastAPI:
                 page=1,
                 total_pages=1,
                 total_images=sum(c for _, c in blocks),
-                latest_images_href=latest_images_href(cfg.archive_path()),
                 prev_block_href=None,
                 next_block_href=None,
             ),
@@ -320,22 +325,27 @@ def create_app() -> FastAPI:
         if hour_i < 0 or hour_i > 23 or mb < 0 or mb > 50:
             raise HTTPException(404, "Bad time")
         archive = cfg.archive_path()
-        all_imgs = list_images_for_block(archive, day, hour_i, mb)
+        files = list_images_for_day(archive, day)
+        all_imgs = images_in_block_from(files, hour_i, mb)
         page_items, page, total_pages = paginate(all_imgs, page, PAGE_SIZE)
         rels = [rel_to_archive(archive, p) for p in page_items]
         end_m = mb + 9
-        prev_b = neighbor_block(archive, day, hour_i, mb, newer=False)
-        next_b = neighbor_block(archive, day, hour_i, mb, newer=True)
+        days_chrono = list_days(archive)
+        prev_b, next_b = neighbor_blocks(
+            archive, day, hour_i, mb, files=files, days=days_chrono
+        )
+        hours = hour_counts_from(files)
+        blocks = block_counts_from(files, hour_i)
         return templates.TemplateResponse(
             request,
             "archive.html",
             _archive_ctx(
                 title=f"Archive {day} {hour_i:02d}:{mb:02d}",
                 level="block",
-                days=list(reversed(list_days(archive))),
+                days=list(reversed(days_chrono)),
                 day=day,
-                hours=hour_counts(archive, day),
-                blocks=block_counts(archive, day, hour_i),
+                hours=hours,
+                blocks=blocks,
                 images=rels,
                 hour=hour_i,
                 minute_block=mb,
@@ -343,7 +353,6 @@ def create_app() -> FastAPI:
                 page=page,
                 total_pages=total_pages,
                 total_images=len(all_imgs),
-                latest_images_href=latest_images_href(archive),
                 prev_block_href=block_href(*prev_b) if prev_b else None,
                 next_block_href=block_href(*next_b) if next_b else None,
                 prev_page_href=block_href(day, hour_i, mb, page - 1) if page > 1 else None,
@@ -365,8 +374,7 @@ def create_app() -> FastAPI:
         if path is None:
             raise HTTPException(404)
         rel = rel_to_archive(archive, path)
-        older = neighbor_rel(archive, rel, newer=False)
-        newer = neighbor_rel(archive, rel, newer=True)
+        older, newer = neighbor_rels(archive, rel)
         info = block_from_rel(rel)
         back_href = block_href(*info[:3]) if info else "/archive"
         return templates.TemplateResponse(

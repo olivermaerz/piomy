@@ -445,8 +445,6 @@ def create_app() -> FastAPI:
         ev: Annotated[float, Form()],
         exposure_time_us: Annotated[str, Form()] = "",
         analogue_gain: Annotated[str, Form()] = "",
-        preview_w: Annotated[int, Form()] = 640,
-        preview_h: Annotated[int, Form()] = 480,
         preview_enabled: Annotated[str, Form()] = "off",
         accent_color: Annotated[str, Form()] = DEFAULT_ACCENT_COLOR,
         new_password: Annotated[str, Form()] = "",
@@ -475,7 +473,6 @@ def create_app() -> FastAPI:
             cfg.capture.analogue_gain = (
                 float(analogue_gain) if analogue_gain.strip() else None
             )
-            cfg.preview.resolution = [int(preview_w), int(preview_h)]
             cfg.preview.enabled = preview_enabled in ("on", "true", "1", "yes")
             cfg.web.accent_color = (accent_color or DEFAULT_ACCENT_COLOR).strip()
             if new_password.strip():

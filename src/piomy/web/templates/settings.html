@@ -80,14 +80,6 @@
         <input type="checkbox" name="preview_enabled" value="on" {% if cfg.preview.enabled %}checked{% endif %}>
         Enable live stream (serves latest.jpg as MJPEG)
       </label>
-      <div class="row">
-        <label>Preview width
-          <input type="number" name="preview_w" value="{{ cfg.preview.resolution[0] }}">
-        </label>
-        <label>Preview height
-          <input type="number" name="preview_h" value="{{ cfg.preview.resolution[1] }}">
-        </label>
-      </div>
     </fieldset>
 
     <fieldset>

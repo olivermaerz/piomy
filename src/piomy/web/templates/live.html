@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block main_attrs %} class="live"{% endblock %}
 {% block content %}
   {% if setup_mode %}
   <div class="banner warn">No web password set. Set one in Settings before using this on your LAN.</div>

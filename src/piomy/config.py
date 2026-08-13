@@ -42,7 +42,6 @@ class CaptureConfig:
 
 @dataclass
 class PreviewConfig:
-    resolution: list[int] = field(default_factory=lambda: [640, 480])
     enabled: bool = True
 
 
@@ -52,7 +51,7 @@ class WebConfig:
     port: int = 8080
     password_hash: str = ""
     accent_color: str = DEFAULT_ACCENT_COLOR
-    workers: int = 2
+    workers: int = 1
 
 
 @dataclass
@@ -161,8 +160,6 @@ def validate(cfg: AppConfig) -> None:
         raise ValueError("capture.exposure_mode must be auto or manual")
     if len(cfg.capture.resolution) != 2:
         raise ValueError("capture.resolution must be [width, height]")
-    if len(cfg.preview.resolution) != 2:
-        raise ValueError("preview.resolution must be [width, height]")
     if cfg.web.port < 1 or cfg.web.port > 65535:
         raise ValueError("web.port out of range")
     if cfg.web.workers < 1 or cfg.web.workers > 8:

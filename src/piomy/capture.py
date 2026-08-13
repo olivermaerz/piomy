@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from piomy.camera import CameraError, create_camera
 from piomy.config import AppConfig, config_mtime, load_config
 from piomy.storage import (
+    RETENTION_CHECK_EVERY,
     ThumbWorker,
     archive_ready,
     enforce_min_free,
@@ -62,7 +63,7 @@ def run(cfg: AppConfig | None = None) -> None:
     thumbs = ThumbWorker(maxsize=8)
 
     def apply_camera() -> None:
-        camera.configure(cfg.capture, cfg.preview)
+        camera.configure(cfg.capture)
 
     try:
         apply_camera()
@@ -80,6 +81,7 @@ def run(cfg: AppConfig | None = None) -> None:
     last_capture_at: str | None = None
     capture_fps: float | None = None
     capture_times: deque[float] = deque(maxlen=20)
+    captures_since_retention = RETENTION_CHECK_EVERY
     camera_ok = True
 
     try:
@@ -126,7 +128,11 @@ def run(cfg: AppConfig | None = None) -> None:
                 capture_times.append(time.monotonic())
                 capture_fps = measured_fps(capture_times)
                 camera_ok = True
-                deleted = enforce_min_free(cfg)
+                captures_since_retention += 1
+                deleted = 0
+                if captures_since_retention >= RETENTION_CHECK_EVERY:
+                    deleted = enforce_min_free(cfg)
+                    captures_since_retention = 0
                 write_status(
                     cfg,
                     {

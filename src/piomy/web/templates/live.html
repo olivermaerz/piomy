@@ -19,13 +19,37 @@
   <script>
     (function () {
       const el = document.getElementById("live-meta");
-      if (!el) return;
+      const img = document.querySelector(".live-frame");
+      const STREAM = "/stream.mjpg";
+      let retryTimer = null;
+      let healthOk = true;
+
+      function reconnectStream() {
+        if (!img) return;
+        img.src = STREAM + "?t=" + Date.now();
+      }
+
+      function scheduleReconnect() {
+        if (!img || retryTimer) return;
+        retryTimer = setTimeout(function () {
+          retryTimer = null;
+          reconnectStream();
+        }, 1500);
+      }
+
+      if (img) {
+        img.addEventListener("error", scheduleReconnect);
+        document.addEventListener("visibilitychange", function () {
+          if (document.visibilityState === "visible") reconnectStream();
+        });
+      }
 
       function fmt(v, suffix) {
         return v == null || v === "" ? "-" : String(v) + suffix;
       }
 
       function render(data) {
+        if (!el) return;
         el.textContent =
           "CPU: " + fmt(data.cpu_temp_c, "°C") +
           " · Capture: " + fmt(data.capture_fps, " fps") +
@@ -35,10 +59,16 @@
       async function refresh() {
         try {
           const res = await fetch("/health", { credentials: "same-origin" });
-          if (!res.ok) return;
+          if (!res.ok) {
+            healthOk = false;
+            return;
+          }
+          const recovered = !healthOk;
+          healthOk = true;
           render(await res.json());
+          if (recovered) reconnectStream();
         } catch (_) {
-          /* keep last good values */
+          healthOk = false;
         }
       }
 

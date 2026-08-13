@@ -4,16 +4,18 @@
   {% if setup_mode %}
   <div class="banner warn">No web password set. Set one in Settings before using this on your LAN.</div>
   {% endif %}
-  <p class="meta" id="live-meta">
-    CPU: {% if cpu_temp_c is not none %}{{ cpu_temp_c }}°C{% else %}-{% endif %}
-    · Capture: {% if capture_fps is not none %}{{ capture_fps }} fps{% else %}-{% endif %}
-    · Free: {% if free_gb is not none %}{{ free_gb }} GiB{% else %}-{% endif %}
-  </p>
-  {% if preview_enabled %}
-  <img class="live-frame" src="/stream.mjpg" alt="Live camera stream">
-  {% else %}
-  <div class="banner">Preview disabled in settings.</div>
-  {% endif %}
+  <div class="live-stage">
+    <p class="meta" id="live-meta">
+      CPU: {% if cpu_temp_c is not none %}{{ cpu_temp_c }}°C{% else %}-{% endif %}
+      · Capture: {% if capture_fps is not none %}{{ capture_fps }} fps{% else %}-{% endif %}
+      · Free: {% if free_gb is not none %}{{ free_gb }} GiB{% else %}-{% endif %}
+    </p>
+    {% if preview_enabled %}
+    <img class="live-frame" src="/stream.mjpg" alt="Live camera stream">
+    {% else %}
+    <div class="banner">Preview disabled in settings.</div>
+    {% endif %}
+  </div>
   <script>
     (function () {
       const el = document.getElementById("live-meta");

@@ -93,6 +93,10 @@ class PiCamera(BaseCamera):
             buffer_count=2,
         )
         picam.configure(config)
+        try:
+            picam.options["quality"] = int(capture.jpeg_quality)
+        except Exception:
+            log.exception("Could not set JPEG quality option")
         self._apply_controls(picam, capture)
         picam.start()
         time.sleep(0.3)  # let auto-exposure settle
@@ -140,20 +144,14 @@ class PiCamera(BaseCamera):
         if self._picam is None:
             raise CameraError("Camera not configured")
         try:
+            self._picam.options["quality"] = int(self._capture.jpeg_quality)
+        except Exception:
+            pass
+        try:
             buf = io.BytesIO()
             self._picam.capture_file(buf, format="jpeg")
             data = buf.getvalue()
             if data.startswith(b"\xff\xd8"):
-                if self._capture.jpeg_quality != 90:
-                    img = Image.open(io.BytesIO(data)).convert("RGB")
-                    out = io.BytesIO()
-                    img.save(
-                        out,
-                        format="JPEG",
-                        quality=self._capture.jpeg_quality,
-                        optimize=True,
-                    )
-                    return out.getvalue()
                 return data
         except Exception:
             log.exception("capture_file jpeg failed; falling back to array path")
@@ -161,7 +159,7 @@ class PiCamera(BaseCamera):
         arr = self._picam.capture_array("main")
         img = self._array_to_rgb_image(arr)
         buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=self._capture.jpeg_quality, optimize=True)
+        img.save(buf, format="JPEG", quality=self._capture.jpeg_quality)
         return buf.getvalue()
 
     def close(self) -> None:

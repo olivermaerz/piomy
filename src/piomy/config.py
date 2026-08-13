@@ -51,7 +51,7 @@ class WebConfig:
     port: int = 8080
     password_hash: str = ""
     accent_color: str = DEFAULT_ACCENT_COLOR
-    workers: int = 1
+    workers: int = 3
 
 
 @dataclass

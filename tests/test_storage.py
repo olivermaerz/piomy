@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import time
+from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 
@@ -106,25 +107,66 @@ def test_min_free_skips_day_within_grace(tmp_path: Path, monkeypatch) -> None:
         storage=StorageConfig(
             archive_dir=str(archive),
             min_free_gb=1000,
-            delete_grace_minutes=60,
+            delete_grace_minutes=30,
         )
     )
 
-    older = archive / "2026" / "08" / "01"
-    newest = archive / "2026" / "08" / "02"
-    older.mkdir(parents=True)
-    newest.mkdir(parents=True)
-    (older / "120000_000001.jpg").write_bytes(_jpeg((1, 0, 0)))
-    (newest / "120100_000001.jpg").write_bytes(_jpeg((0, 1, 0)))
-
-    now = time.time()
-    os.utime(older, (now - 10, now - 10))
-    os.utime(newest, (now - 5, now - 5))
+    now = datetime.now().astimezone().replace(hour=0, minute=10, second=0, microsecond=0)
+    yesterday = (now - timedelta(days=1)).strftime("%Y/%m/%d")
+    today = now.strftime("%Y/%m/%d")
+    y_dir = archive.joinpath(*yesterday.split("/"))
+    t_dir = archive.joinpath(*today.split("/"))
+    y_dir.mkdir(parents=True)
+    t_dir.mkdir(parents=True)
+    (y_dir / "120000_000001.jpg").write_bytes(_jpeg((1, 0, 0)))
+    (t_dir / "000500_000001.jpg").write_bytes(_jpeg((0, 1, 0)))
 
     monkeypatch.setattr("piomy.storage.free_bytes", lambda p: 0)
-    deleted = enforce_min_free(cfg)
+    deleted = enforce_min_free(cfg, now=now)
     assert deleted == 0
-    assert older.exists()
+    assert y_dir.exists()
+    assert t_dir.exists()
+
+
+def test_min_free_deletes_oldest_calendar_day_not_recently_touched(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A fresh mtime on the oldest day must not protect it (that used to skip it
+    and delete the next day instead)."""
+    archive = tmp_path / "archive"
+    archive.mkdir()
+    cfg = AppConfig(
+        storage=StorageConfig(
+            archive_dir=str(archive),
+            min_free_gb=1000,
+            delete_grace_minutes=30,
+        )
+    )
+
+    now = datetime.now().astimezone().replace(hour=12, minute=0, second=0, microsecond=0)
+    d9 = (now - timedelta(days=4)).strftime("%Y/%m/%d")
+    d10 = (now - timedelta(days=3)).strftime("%Y/%m/%d")
+    today = now.strftime("%Y/%m/%d")
+    oldest = archive.joinpath(*d9.split("/"))
+    middle = archive.joinpath(*d10.split("/"))
+    newest = archive.joinpath(*today.split("/"))
+    for folder in (oldest, middle, newest):
+        folder.mkdir(parents=True)
+        (folder / "120000_000001.jpg").write_bytes(_jpeg((1, 0, 0)))
+
+    # Oldest folder looks "recently written" (file manager, leftover .tmp, …)
+    t = time.time()
+    os.utime(oldest, (t, t))
+    os.utime(middle, (t - 86400 * 3, t - 86400 * 3))
+
+    monkeypatch.setattr(
+        "piomy.storage.free_bytes",
+        lambda p: 0 if oldest.exists() else 10 * (1024**4),
+    )
+    deleted = enforce_min_free(cfg, now=now)
+    assert deleted == 1
+    assert not oldest.exists()
+    assert middle.exists()
     assert newest.exists()
 
 

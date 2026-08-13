@@ -9,8 +9,7 @@ import os
 import re
 import shutil
 import sys
-import time
-from datetime import datetime, timezone
+from datetime import date, datetime, time as dt_time, timezone
 from pathlib import Path
 from typing import Any
 
@@ -265,8 +264,30 @@ def _prune_empty_parents(archive_dir: Path, day_folder_path: Path) -> None:
             break
 
 
-def enforce_min_free(cfg: AppConfig) -> int:
-    """Delete oldest day folders until min_free_gb is met. Returns days deleted."""
+def _day_date(day: str) -> date | None:
+    parsed = parse_day(day)
+    if parsed is None:
+        return None
+    try:
+        return date(int(parsed[0]), int(parsed[1]), int(parsed[2]))
+    except ValueError:
+        return None
+
+
+def _retention_protected(day: str, now: datetime, grace_seconds: int) -> bool:
+    """Keep today, and yesterday until grace after that day ended."""
+    d = _day_date(day)
+    if d is None:
+        return True
+    if d >= now.date():
+        return True
+    tz = now.tzinfo
+    day_end = datetime.combine(d, dt_time(23, 59, 59), tzinfo=tz)
+    return (now - day_end).total_seconds() < grace_seconds
+
+
+def enforce_min_free(cfg: AppConfig, *, now: datetime | None = None) -> int:
+    """Delete oldest calendar day folders until min_free_gb is met. Returns days deleted."""
     archive_dir = cfg.archive_path()
     ok, reason = archive_ready(archive_dir)
     if not ok:
@@ -278,7 +299,7 @@ def enforce_min_free(cfg: AppConfig) -> int:
         return 0
 
     grace = cfg.storage.delete_grace_minutes * 60
-    now = time.time()
+    now = now or datetime.now().astimezone()
     deleted = 0
     thumbs_root = cfg.thumbs_dir()
 
@@ -292,16 +313,16 @@ def enforce_min_free(cfg: AppConfig) -> int:
             )
             break
 
+        newest = days[-1]
         victim_day = None
         victim_folder = None
-        for day in days[:-1]:
+        for day in days:
+            if day == newest:
+                continue
+            if _retention_protected(day, now, grace):
+                continue
             folder = day_folder(archive_dir, day)
             if folder is None:
-                continue
-            try:
-                if now - folder.stat().st_mtime < grace:
-                    continue
-            except OSError:
                 continue
             victim_day = day
             victim_folder = folder
